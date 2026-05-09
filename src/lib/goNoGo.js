@@ -5,6 +5,8 @@ function condition(name, status, value, limit) {
 }
 
 function nearLimit(value, limit, marginPct, direction = 'max') {
+  // Caution bands are relative to personal minimums. For maximum limits,
+  // "near" means close to exceeding; for minimum limits, close to dropping below.
   const margin = Math.abs(limit) * (marginPct / 100);
   return direction === 'max' ? value >= limit - margin : value <= limit + margin;
 }
@@ -14,6 +16,8 @@ function text(value) {
 }
 
 function observedWeatherHazards(metar) {
+  // METAR present-weather strings are terse. These token checks intentionally
+  // look for aviation weather codes instead of natural-language phrases.
   const raw = text(metar.raw);
   const presentWeather = text(metar.weather || metar.wx_string || metar.wxString);
   const combined = `${presentWeather} ${raw}`;
@@ -37,6 +41,8 @@ function observedWeatherHazards(metar) {
 }
 
 function tafHazards(taf, minimums) {
+  // Only the immediate forecast window is used for training decisions so the
+  // card highlights near-term deterioration rather than every TAF period.
   const periods = Array.isArray(taf?.periods) ? taf.periods : [];
   const now = Date.now();
   const lookahead = now + 3 * 60 * 60 * 1000;
@@ -69,6 +75,8 @@ function tafHazards(taf, minimums) {
 }
 
 export function evaluateGoNoGo(metar, minimums, tfrs = [], taf = null) {
+  // Data flow: normalized METAR + saved personal minimums + nearby TFRs/TAF
+  // become a status plus condition rows for the UI.
   if (!metar || !minimums) {
     return { status: 'no_go', conditions: [condition('weather', 'fail', 'Unavailable', 'Required')] };
   }

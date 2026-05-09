@@ -3,6 +3,8 @@ import { formatInTimeZone } from 'date-fns-tz';
 
 const LOCAL_TZ = 'America/Chicago';
 
+// Keep all pilot-facing dates in one timezone so saved lessons/logbook entries
+// do not drift based on the browser or serverless runtime locale.
 export function toUTC(localDate) {
   return new Date(localDate).toISOString();
 }

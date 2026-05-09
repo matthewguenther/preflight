@@ -24,6 +24,8 @@ export function LogbookEntryForm({ onSave, onCancel }) {
     debrief_notes: '',
     maneuvers_practiced: [],
   });
+  // Keep derived values and validation live as the user edits. The submitted
+  // record is normalized, not the raw form state.
   const normalized = useMemo(() => normalizeLogbook({ ...form, hobbs_total: 0 }), [form]);
   const validation = useMemo(() => validateLogbook(normalized), [normalized]);
   const set = (field) => (event) => setForm({ ...form, [field]: event.target.value });

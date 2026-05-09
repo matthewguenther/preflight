@@ -5,6 +5,8 @@ import { LoadingState } from '../ui/LoadingState';
 import { ProgressBar } from '../ui/ProgressBar';
 
 export function CheckrideReadiness() {
+  // Training state is split across blob stores. computeReadiness is the join
+  // point that turns those independent records into one weighted score.
   const entries = useBlob('logbook', 'entries');
   const maneuvers = useBlob('training', 'maneuvers');
   const ground = useBlob('training', 'ground_school');

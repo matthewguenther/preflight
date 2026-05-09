@@ -25,6 +25,8 @@ export function GroundSchool() {
   const last = testList.at(-1)?.score_pct || 0;
 
   async function cycle(topic) {
+    // Topic buttons are quick toggles: not started -> in progress -> complete.
+    // The full topic object is preserved so future metadata survives status edits.
     const current = topics[topic] || { status: 'not_started' };
     await ground.save({ ...topics, [topic]: { ...current, status: nextStatus[current.status], last_updated: todayLocalISO() } });
   }

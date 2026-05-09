@@ -11,6 +11,8 @@ const DATASET = {
 };
 
 async function getOrSeed(storeName, key) {
+  // Export should be complete even on a fresh account, so missing known keys are
+  // seeded the same way the normal blobs endpoint does.
   const store = getStore({ name: storeName });
   let value = await store.get(key, { type: 'json' });
   if (value === null) {
@@ -28,6 +30,8 @@ export default async (req) => {
   if (!auth.ok) return json({ error: auth.message }, { status: auth.status });
 
   const data = {};
+  // Keep export deterministic by walking the explicit dataset manifest instead
+  // of dumping every blob in the account.
   for (const [store, keys] of Object.entries(DATASET)) {
     data[store] = {};
     for (const key of keys) {

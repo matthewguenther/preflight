@@ -27,8 +27,10 @@ async function fetchText(url) {
 }
 
 function normalizeIcao(value) {
+  // Prefix simple three-letter US airport IDs for APIs that expect ICAO, but
+  // keep alphanumeric public airport IDs such as 7M5 intact.
   const input = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (input.length === 3) return `K${input}`;
+  if (/^[A-Z]{3}$/.test(input)) return `K${input}`;
   return input || 'KVBT';
 }
 
@@ -53,6 +55,8 @@ function bearingDeg(a, b) {
 }
 
 function runwayEndHeading(id, fallback) {
+  // AviationWeather runways are physical pairs (18/36). Use the first runway
+  // number to estimate one end's magnetic heading, then derive the reciprocal.
   const primary = String(id || '').split('/')[0];
   const numeric = Number(primary.replace(/[^\d]/g, ''));
   if (Number.isFinite(numeric) && numeric > 0) return numeric === 36 ? 360 : numeric * 10;
@@ -110,6 +114,9 @@ function parseAviationWeatherFreqs(freqs) {
 }
 
 function parseAirnavFrequencies(html) {
+  // AirNav is used only as a communications fallback. The parser narrows to the
+  // Airport Communications section so nearby weather stations are not mistaken
+  // for CTAF/tower frequencies.
   const text = htmlToText(html);
   const section = text.match(/Airport Communications([\s\S]*?)(?:Nearby radio navigation aids|Airport Services|Runway Information|Instrument Procedures|Airport Operational Statistics)/i)?.[1] || '';
   if (!section) return [];
@@ -163,6 +170,8 @@ function parseAirnavFrequencies(html) {
 }
 
 function parseSkyVectorFrequencies(html) {
+  // SkyVector's communications table is more structured when present, so try it
+  // before falling back to AirNav's plain text section parser.
   const table = String(html || '').match(/<table[^>]+id=["']aptcomms["'][^>]*>([\s\S]*?)<\/table>/i)?.[1] || '';
   if (!table) return [];
   const rows = [];
@@ -182,6 +191,8 @@ function parseSkyVectorFrequencies(html) {
 }
 
 function normalizeAirport(airport, station, icao) {
+  // Merge two AviationWeather feeds into the shape the React cards expect.
+  // airport has runways/services; stationinfo is often better for lat/lon/site.
   const source = airport || station || {};
   const lat = Number(source.lat);
   const lon = Number(source.lon);
@@ -225,6 +236,8 @@ function normalizeAirport(airport, station, icao) {
 }
 
 async function frequencyFallback(airport) {
+  // Data flow: if AviationWeather provides no useful comms, try public airport
+  // reference pages and record which provider supplied the fallback.
   const id = airport?.icao || airport?.faa_id;
   if (!id) return null;
   const skyVectorId = airport?.faa_id || airport?.icao?.replace(/^K/, '') || id;
@@ -254,6 +267,8 @@ async function frequencyFallback(airport) {
 }
 
 async function alternatesFor(airport) {
+  // Find nearby reporting stations, compute distance/bearing, then enrich the
+  // top candidates with METAR category and wind for the alternates card.
   if (!airport.lat || !airport.lon) return [];
   const delta = 0.65;
   const bbox = `${airport.lat - delta},${airport.lon - delta},${airport.lat + delta},${airport.lon + delta}`;
@@ -289,6 +304,8 @@ export default async (req) => {
 
   const url = new URL(req.url);
   const icao = normalizeIcao(url.searchParams.get('icao'));
+  // Fetch airport and station info together. They are complementary feeds, and
+  // normalizing after both return gives the UI one stable airport object.
   const [airports, stations] = await Promise.all([
     fetchJson(`${API_BASE}/airport?ids=${icao}&format=json`),
     fetchJson(`${API_BASE}/stationinfo?ids=${icao}&format=json`),

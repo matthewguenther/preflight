@@ -5,6 +5,8 @@ function sum(entries, predicate, field = 'hobbs_total') {
 }
 
 function progress(label, current, required, weight, complete = Math.min(current / required, 1)) {
+  // Each readiness component contributes a weighted fraction to the final score.
+  // The weights are product choices, not regulatory math.
   return {
     label,
     current,
@@ -15,6 +17,8 @@ function progress(label, current, required, weight, complete = Math.min(current 
 }
 
 export function aggregateHours(entries = []) {
+  // One pass of logbook rollups used by multiple panels: readiness, expenses,
+  // and logbook progress bars all depend on these derived totals.
   return {
     total: sum(entries, () => true),
     dual: sum(entries, (entry) => entry.type === 'dual'),
@@ -31,6 +35,8 @@ export function aggregateHours(entries = []) {
 }
 
 export function computeReadiness({ entries = [], maneuvers = {}, groundSchool = {}, writtenExam = {} }) {
+  // Combines logbook totals, instructor signoffs, ground school, and written
+  // exam state into a single "how close are we" dashboard score.
   const hours = aggregateHours(entries);
   const signed = Object.values(maneuvers).filter((item) => item?.signed_off).length;
   const completeTopics = Object.values(groundSchool).filter((item) => item?.status === 'complete').length;
@@ -56,6 +62,8 @@ export function computeReadiness({ entries = [], maneuvers = {}, groundSchool = 
 }
 
 export function projectedTotalCost(expenses = [], currentTotalHours, targetHours = 40) {
+  // Projection assumes the observed average cost/hour continues through the
+  // target hour count. Confidence is based only on sample size.
   const totalSpent = expenses.reduce((sum, expense) => sum + Number(expense.total || 0), 0);
   if (currentTotalHours <= 0) return { projected: 0, remaining: 0, cost_per_hour: 0, confidence: 'low' };
   const costPerHour = totalSpent / currentTotalHours;

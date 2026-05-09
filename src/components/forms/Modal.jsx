@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 export function Modal({ isOpen, onClose, title, children }) {
   useEffect(() => {
     if (!isOpen) return undefined;
+    // While a modal is open, trap page scroll and allow Escape to close it. The
+    // cleanup restores the previous body style for nested/rapid modal usage.
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (event) => {
@@ -19,6 +21,8 @@ export function Modal({ isOpen, onClose, title, children }) {
 
   if (!isOpen) return null;
 
+  // Portaling keeps the modal above the dashboard layout regardless of where the
+  // triggering component lives in the DOM tree.
   return createPortal(
     <div className="tactical-modal-host fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-stone-950/60 p-3 backdrop-blur-sm sm:p-6" onMouseDown={onClose}>
       <div

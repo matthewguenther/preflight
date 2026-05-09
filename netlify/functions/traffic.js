@@ -9,6 +9,8 @@ function clean(value) {
 }
 
 function normalizeAircraft(ac) {
+  // adsb.fi uses terse field names from ADS-B decoders. Convert them once into
+  // names the radar table and map marker components can read directly.
   return {
     hex: ac.hex,
     callsign: clean(ac.flight) || clean(ac.r) || ac.hex,
@@ -34,6 +36,8 @@ export default async (req) => {
   if (!auth.ok) return json({ error: auth.message }, { status: auth.status });
 
   const url = new URL(req.url);
+  // The browser passes the selected airport's center point; radius is clamped so
+  // accidental inputs do not create oversized public API requests.
   const radius = Math.min(80, Math.max(5, Number(url.searchParams.get('radius_nm') || DEFAULT_RADIUS_NM)));
   const center = {
     icao: (url.searchParams.get('icao') || DEFAULT_CENTER.icao).toUpperCase(),
@@ -54,6 +58,7 @@ export default async (req) => {
   if (!res.ok) return json({ error: `ADS-B feed returned ${res.status}` }, { status: 502 });
   const body = await res.json();
   const aircraft = (body.ac || [])
+    // Drop incomplete positions before computing map pixels on the client.
     .filter((ac) => Number.isFinite(Number(ac.lat)) && Number.isFinite(Number(ac.lon)))
     .map(normalizeAircraft)
     .sort((a, b) => (a.distance_nm ?? 999) - (b.distance_nm ?? 999));

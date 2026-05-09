@@ -4,6 +4,8 @@ import { apiFetch } from '../lib/api';
 export function useFuel(selectedIcao) {
   const icao = selectedIcao || import.meta.env.VITE_AIRPORT_ICAO || 'KVBT';
   return useQuery({
+    // Fuel prices change much more slowly than weather, but we still refresh
+    // periodically so the AirNav source-of-truth display stays current.
     queryKey: ['fuel', icao],
     queryFn: () => apiFetch(`/.netlify/functions/fuel?icao=${icao}`),
     staleTime: 15 * 60 * 1000,

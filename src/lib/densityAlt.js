@@ -1,4 +1,6 @@
 export function densityAltitude(elevationFt, oatC, altimeterInHg) {
+  // Approximation for briefing display only: pressure altitude plus 120 ft per
+  // degree C above ISA. Null inputs stay null so cards can show "--".
   if ([elevationFt, oatC, altimeterInHg].some((value) => value == null || Number.isNaN(Number(value)))) {
     return null;
   }

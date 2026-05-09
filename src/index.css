@@ -121,9 +121,9 @@ textarea {
     #d5dce7 19px 25px
   );
   filter: drop-shadow(0 0 14px rgba(240, 68, 22, 0.28));
-  transform: rotate(-5deg) skewY(0deg);
+  transform: rotate(-7deg) skewY(-1deg) translateY(0);
   transform-origin: left center;
-  animation: windsockFlutter 2.8s ease-in-out infinite;
+  animation: windsockFlutter 3.4s ease-in-out infinite;
 }
 
 .ops-nav-item {
@@ -709,6 +709,61 @@ textarea {
   transform: translateX(-50%) rotate(45deg);
   border-left: 2px solid #f04416;
   border-top: 2px solid #f04416;
+}
+
+.runway-options {
+  overflow: hidden;
+  border: 1px solid rgba(148, 183, 217, 0.14);
+  border-radius: 0.45rem;
+  background: rgba(2, 10, 19, 0.42);
+}
+
+.runway-options-head,
+.runway-option-row {
+  display: grid;
+  grid-template-columns: minmax(4rem, 1fr) minmax(4.5rem, 0.8fr) minmax(4.5rem, 0.8fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.runway-options-head {
+  border-bottom: 1px solid rgba(148, 183, 217, 0.12);
+  padding: 0.65rem 0.75rem;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runway-options-list {
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.runway-option-row {
+  min-height: 2.35rem;
+  padding: 0.55rem 0.75rem;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  border-bottom: 1px solid rgba(148, 183, 217, 0.08);
+}
+
+.runway-option-row:last-child {
+  border-bottom: 0;
+}
+
+.runway-option-row strong {
+  color: #f8fbff;
+}
+
+.runway-option-row.active {
+  background: rgba(240, 68, 22, 0.12);
+  color: #fed7aa;
+}
+
+.runway-option-row.active strong {
+  color: #ff8a4c;
 }
 
 .alternate-row {
@@ -1478,10 +1533,14 @@ textarea {
   0%,
   100% {
     clip-path: polygon(0 0, 100% 25%, 100% 75%, 0 100%);
-    transform: rotate(-5deg) skewY(0deg);
+    transform: rotate(-7deg) skewY(-1deg) translateY(0);
   }
-  50% {
-    clip-path: polygon(0 5%, 100% 17%, 100% 83%, 0 95%);
-    transform: rotate(-3deg) skewY(2deg);
+  45% {
+    clip-path: polygon(0 5%, 100% 14%, 100% 86%, 0 95%);
+    transform: rotate(1deg) skewY(4deg) translateY(-1px);
+  }
+  72% {
+    clip-path: polygon(0 1%, 100% 30%, 100% 70%, 0 99%);
+    transform: rotate(-10deg) skewY(-3deg) translateY(1px);
   }
 }

@@ -5,11 +5,13 @@ const WIKIPEDIA_API = 'https://en.wikipedia.org/w/api.php';
 
 function normalizeIcao(value) {
   const input = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (input.length === 3) return `K${input}`;
+  if (/^[A-Z]{3}$/.test(input)) return `K${input}`;
   return input || 'KVBT';
 }
 
 function airportImageSearches(icao, name) {
+  // Try both the full airport name and identifiers. Some Wikipedia pages use
+  // FAA IDs while others use ICAO IDs.
   const cleanName = String(name || '').replace(/\s+/g, ' ').trim();
   const searches = [
     cleanName ? `${cleanName} airport` : '',
@@ -20,6 +22,8 @@ function airportImageSearches(icao, name) {
 }
 
 function scorePage(page, icao, name) {
+  // Search results are fuzzy. Score likely airport pages higher before choosing
+  // the lead image.
   const title = String(page.title || '');
   const upperTitle = title.toUpperCase();
   const shortCode = icao.replace(/^K/, '');
@@ -37,6 +41,8 @@ function scorePage(page, icao, name) {
 }
 
 async function wikipediaImageFor(search, icao, name) {
+  // Wikipedia is used only for optional hero imagery; failures return null so
+  // the dashboard can fall back to its non-image background.
   const params = new URLSearchParams({
     action: 'query',
     generator: 'search',

@@ -4,6 +4,8 @@ import { requireAuth, json } from './_auth.js';
 const NOTAM_URL = 'https://external-api.faa.gov/notamapi/v1/notams';
 
 function normalizeNotam(item) {
+  // The FAA NOTAM API has changed response shapes over time. Check several
+  // likely fields and return one stable shape to the UI.
   const text = item.icaoMessage || item.traditionalMessage || item.text || item.summary || item.raw || '';
   return {
     id: item.notamNumber || item.id || item.number || 'unknown',
@@ -30,6 +32,8 @@ export default async (req) => {
   const clientSecret = process.env.FAA_NOTAM_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
+    // Local/dev deployments may not have FAA credentials. Cached data is better
+    // than an empty panel when available, but mark it stale for the UI.
     const cached = await cachedResult(store, icao);
     if (cached) return json({ ...cached, stale: true });
     return json({ fetched_utc: new Date().toISOString(), count: 0, notams: [], warning: 'FAA NOTAM credentials are not configured' });
@@ -44,6 +48,8 @@ export default async (req) => {
     });
     if (!res.ok) throw new Error(`FAA NOTAM API returned ${res.status}`);
     const body = await res.json();
+    // Accept array and paginated response shapes so a minor FAA envelope change
+    // does not break the panel outright.
     const records = body.items || body.notams || body.content || (Array.isArray(body) ? body : []);
     const payload = {
       fetched_utc: new Date().toISOString(),

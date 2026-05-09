@@ -5,6 +5,8 @@ import { normalizeExpense, validateExpense } from '../../lib/validation';
 import { Field, inputClass } from './Field';
 
 export function ExpenseEntryForm({ logbookEntries = [], onSave, onCancel }) {
+  // Default to the latest logbook entry so a new expense can be tied to the
+  // lesson that most likely created it, while still allowing "None".
   const latest = [...logbookEntries].sort((a, b) => b.date.localeCompare(a.date))[0];
   const [form, setForm] = useState({
     date: latest?.date || todayLocalISO(),
@@ -16,6 +18,8 @@ export function ExpenseEntryForm({ logbookEntries = [], onSave, onCancel }) {
     fuel_cost: 0,
     notes: '',
   });
+  // Total is derived from line items on every edit; the user never types the
+  // saved total directly.
   const normalized = useMemo(() => normalizeExpense({ ...form, total: 0 }), [form]);
   const validation = useMemo(() => validateExpense(normalized, logbookEntries), [normalized, logbookEntries]);
   const set = (field) => (event) => setForm({ ...form, [field]: event.target.value });

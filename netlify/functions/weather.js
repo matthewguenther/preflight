@@ -24,6 +24,8 @@ function altimeterInHg(metar) {
 }
 
 function normalizeMetar(metar) {
+  // AviationWeather's field names mirror raw feed abbreviations. Normalize them
+  // once here so React components can read descriptive names.
   if (!metar) return null;
   const clouds = Array.isArray(metar.clouds) ? metar.clouds : [];
   const ceiling = clouds.find((cloud) => ['BKN', 'OVC', 'VV'].includes(cloud.cover));
@@ -46,6 +48,8 @@ function normalizeMetar(metar) {
 }
 
 function normalizeTaf(taf) {
+  // Keep only the first few TAF periods because the dashboard uses this for
+  // near-term planning, not a full briefing replacement.
   if (!taf) return { raw: '', issued_utc: null, periods: [] };
   const periods = Array.isArray(taf.fcsts) ? taf.fcsts : Array.isArray(taf.forecast) ? taf.forecast : [];
   return {
@@ -66,6 +70,8 @@ function normalizeTaf(taf) {
 }
 
 function parseWindsAloft(rows, icao) {
+  // Wind/temp rows can arrive either as compact FD-style strings or expanded
+  // direction/speed columns; support both shapes.
   const row = Array.isArray(rows) ? rows.find((item) => item.station === icao || item.icaoId === icao || item.id === icao) : null;
   if (!row) return {};
   const result = {};
@@ -90,6 +96,8 @@ export default async (req) => {
 
   const url = new URL(req.url);
   const icao = (url.searchParams.get('icao') || 'KVBT').toUpperCase();
+  // Pull weather feeds in parallel. Optional feeds fall back to empty arrays so
+  // METAR/TAF can still render if winds aloft or G-AIRMET fails.
   const [metars, tafs, winds, gairmets] = await Promise.all([
     fetchJson(`${METAR_URL}?ids=${icao}&format=json&taf=false`),
     fetchJson(`${TAF_URL}?ids=${icao}&format=json`),

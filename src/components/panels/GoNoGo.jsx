@@ -19,6 +19,9 @@ const styles = {
 
 export function GoNoGo() {
   const [open, setOpen] = useState(false);
+  // This older panel pulls its own feeds instead of receiving query objects from
+  // App. It demonstrates the same pattern: hooks fetch data, then lib/goNoGo
+  // turns it into renderable condition rows.
   const weather = useWeather();
   const tfr = useTfr();
   const minimums = useBlob('config', 'personal_minimums');

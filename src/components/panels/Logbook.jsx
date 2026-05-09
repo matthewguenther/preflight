@@ -14,6 +14,8 @@ export function Logbook() {
   const entries = useBlob('logbook', 'entries');
   if (entries.isLoading) return <PanelCard title="Logbook" className="md:col-span-2"><LoadingState /></PanelCard>;
   const list = entries.data || [];
+  // aggregateHours centralizes Part 61 progress math so this panel and the
+  // readiness/cost panels do not drift apart.
   const hours = aggregateHours(list);
   const progress = [
     ['Total', hours.total, PART_61_REQUIREMENTS.total_hours],

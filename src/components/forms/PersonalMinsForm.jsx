@@ -4,6 +4,8 @@ import { Field, inputClass } from './Field';
 
 export function PersonalMinsForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(initial);
+  // The form stores numbers because go/no-go comparisons read these values
+  // directly from the saved config blob.
   const validation = useMemo(() => validatePersonalMinimums(form), [form]);
   const set = (field) => (event) => setForm({ ...form, [field]: Number(event.target.value) });
 

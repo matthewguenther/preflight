@@ -4,6 +4,8 @@ const API_BASE = 'https://aviationweather.gov/api/data';
 const TFR_URL = 'https://tfr.faa.gov/tfrapi/exportTfrList';
 
 async function airportPoint(icao) {
+  // TFR records are not requested by airport, so first resolve the selected
+  // airport's point and use it for distance filtering.
   const res = await fetch(`${API_BASE}/stationinfo?ids=${icao}&format=json`);
   if (!res.ok) return { lat: 36.3444, lon: -94.2211 };
   const stations = await res.json();
@@ -25,6 +27,8 @@ function distanceNm(a, b) {
 }
 
 function coordinatesFrom(record) {
+  // FAA TFR exports can be flat records or GeoJSON. For polygons, use a simple
+  // coordinate average as the display/filtering center.
   if (record.lat && record.lon) return { lat: Number(record.lat), lon: Number(record.lon) };
   if (record.latitude && record.longitude) return { lat: Number(record.latitude), lon: Number(record.longitude) };
   const coords = record.geometry?.coordinates;
@@ -73,6 +77,8 @@ export default async (req) => {
   if (!res.ok) return json({ error: `TFR feed returned ${res.status}` }, { status: 502 });
   const records = await res.json();
   const tfrs = Array.isArray(records) ? records : records.features || [];
+  // Keep only TFRs within 100 NM of the selected airport. The cards can then
+  // show nearby restrictions without rendering a national feed.
   const nearby = tfrs
     .map((record) => {
       const source = record.properties ? { ...record.properties, geometry: record.geometry } : record;

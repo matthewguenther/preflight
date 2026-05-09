@@ -10,6 +10,8 @@ import { LoadingState } from '../ui/LoadingState';
 
 export function NextLesson() {
   const [open, setOpen] = useState(false);
+  // useLesson may eventually prefer Flight Schedule Pro; today it falls back to
+  // the manually saved scheduling blob exposed through the same hook contract.
   const lesson = useLesson();
   if (lesson.isLoading) return <PanelCard title="Next lesson"><LoadingState lines={3} /></PanelCard>;
   if (lesson.isError) return <PanelCard title="Next lesson"><ErrorState error={lesson.error} onRetry={lesson.refetch} /></PanelCard>;

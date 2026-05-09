@@ -19,6 +19,8 @@ export default async (req) => {
 
   const body = await res.json();
   const past = Array.isArray(body.radar?.past) ? body.radar.past : [];
+  // RainViewer returns a list of past radar frames. The UI only needs the most
+  // recent path and the host so it can assemble map tile URLs.
   const latest = past[past.length - 1] || null;
 
   return json(

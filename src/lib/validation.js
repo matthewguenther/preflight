@@ -5,6 +5,8 @@ const round1 = (value) => Math.round(Number(value) * 10) / 10;
 const round2 = (value) => Math.round(Number(value) * 100) / 100;
 
 export function validateLogbook(entry) {
+  // Forms call normalize first, then validate this typed shape. Returning a map
+  // of field errors makes it easy for Field components to show inline messages.
   const errors = {};
   const hobbsTotal = round1(Number(entry.hobbs_end) - Number(entry.hobbs_start));
   if (!entry.date) errors.date = 'Required';
@@ -30,6 +32,8 @@ export function validateLogbook(entry) {
 }
 
 export function normalizeLogbook(entry) {
+  // Convert browser input strings to numbers and derive hobbs_total from start
+  // and end so saved records do not trust a user-editable total.
   return {
     ...entry,
     hobbs_start: Number(entry.hobbs_start || 0),
@@ -45,6 +49,8 @@ export function normalizeLogbook(entry) {
 }
 
 export function validateExpense(entry, logbookEntries = []) {
+  // Expense totals are recomputed from line items so the stored total stays
+  // consistent with what charts and projections expect.
   const errors = {};
   if (!entry.date) errors.date = 'Required';
   if (entry.date > todayLocalISO()) errors.date = 'Date cannot be in the future';
@@ -78,6 +84,8 @@ export function normalizeExpense(entry) {
 }
 
 export function validatePersonalMinimums(minimums) {
+  // These ranges are sanity rails, not FAA limits. They prevent broken saved
+  // config from making every go/no-go check meaningless.
   const errors = {};
   const ranges = {
     ceiling_ft: [1000, 10000],

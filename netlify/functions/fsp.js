@@ -5,6 +5,8 @@ export default async (req) => {
   if (!auth.ok) return json({ error: auth.message }, { status: auth.status });
 
   if (!process.env.FSP_API_KEY || !process.env.FSP_CLUB_ID) {
+    // Placeholder integration: the UI can call this safely before Flight
+    // Schedule Pro credentials/API details are available.
     return json({
       fetched_utc: new Date().toISOString(),
       configured: false,

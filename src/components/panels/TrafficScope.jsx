@@ -19,6 +19,8 @@ function zoomForRadius(radiusNm) {
 }
 
 function lonLatToWorld(lat, lon, zoom) {
+  // Same Web Mercator math used by map tiles. The scope positions everything as
+  // pixel offsets from the selected airport's world coordinate.
   const sinLat = Math.sin((lat * Math.PI) / 180);
   const scale = TILE_SIZE * 2 ** zoom;
   return {
@@ -32,6 +34,8 @@ function metersPerPixel(lat, zoom) {
 }
 
 function pointFor(ac, centerWorld, zoom) {
+  // Aircraft lat/lon -> screen offset from center. CSS later anchors that offset
+  // at 50%/50% of the scope.
   const world = lonLatToWorld(ac.lat, ac.lon, zoom);
   return {
     x: world.x - centerWorld.x,
@@ -40,6 +44,7 @@ function pointFor(ac, centerWorld, zoom) {
 }
 
 function rangePixels(rangeNm, centerLat, zoom) {
+  // Converts nautical-mile range rings into CSS pixels at the current latitude.
   return (rangeNm * METERS_PER_NM) / metersPerPixel(centerLat, zoom);
 }
 
@@ -80,6 +85,8 @@ function MapTiles({ center, centerWorld, zoom }) {
   const centerTileX = Math.floor(centerWorld.x / TILE_SIZE);
   const centerTileY = Math.floor(centerWorld.y / TILE_SIZE);
   const tiles = [];
+  // Render a small fixed grid around the center tile instead of using a full map
+  // SDK. This keeps the radar scope lightweight and predictable.
   for (let x = centerTileX - 3; x <= centerTileX + 3; x += 1) {
     for (let y = centerTileY - 2; y <= centerTileY + 2; y += 1) {
       tiles.push({ x, y });
@@ -126,6 +133,8 @@ function ScopeShell({ title, className, action, children }) {
 }
 
 export function TrafficScope({ airport, title = 'Flight Radar / ADS-B', className = '' }) {
+  // Data flow: selected airport -> useTraffic(radius, center) -> normalized
+  // aircraft list -> map markers, range rings, and side table.
   const [radius, setRadius] = useState(10);
   const [highlighted, setHighlighted] = useState(null);
   const center = {
@@ -141,6 +150,7 @@ export function TrafficScope({ airport, title = 'Flight Radar / ADS-B', classNam
   if (traffic.isError) return <ScopeShell title={title} className={className}><ErrorState title="Could not reach ADS-B traffic feed" error={traffic.error} onRetry={traffic.refetch} /></ScopeShell>;
 
   const aircraft = traffic.data.aircraft || [];
+  // The function sorts by distance, so aircraft[0] is the closest target.
   const closest = aircraft[0];
   const lowPattern = aircraft.filter((ac) => Number(ac.altitude_ft) > 0 && Number(ac.altitude_ft) <= LOW_ALT_FT).length;
   const stale = isOlderThan(traffic.data.fetched_utc, 45 * 1000);

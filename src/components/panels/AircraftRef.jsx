@@ -14,6 +14,8 @@ export function AircraftRef() {
 
   const aircraft = FLEET.find((item) => item.tail === selected.data) || PRIMARY_AIRCRAFT;
   const hasSpeeds = Boolean(aircraft.vspeeds);
+  // Va changes with weight. When the selected aircraft has a table, pick the
+  // matching row; otherwise show the POH-required fallback.
   const va = hasSpeeds
     ? aircraft.vspeeds.Va_table.find((row) => Number(row.weight_lb) === Number(weight)) || aircraft.vspeeds.Va_table[0]
     : null;

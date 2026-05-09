@@ -55,6 +55,8 @@ const FREQUENCY_FALLBACKS = {
   ],
 };
 
+// Most of this file is intentionally self-contained: the dashboard cards share
+// small formatting and aviation helpers without forcing a broad component tree.
 function money(value) {
   return value == null ? '--' : `$${Number(value).toFixed(2)}`;
 }
@@ -90,6 +92,9 @@ function airportPlace(airport) {
 }
 
 function airportFrequencies(airport) {
+  // Preferred path: the airport function already normalized frequencies into
+  // { label, value }. The parsing below is a backup for raw AviationWeather
+  // semicolon strings and the hard-coded KVBT rescue list.
   if (Array.isArray(airport?.frequencies) && airport.frequencies.length) {
     return airport.frequencies.filter((item) => item?.label || item?.value);
   }
@@ -126,6 +131,9 @@ function faaNotamSearchUrl(airport) {
 }
 
 function lonLatToWorld(lat, lon, zoom = RADAR_ZOOM) {
+  // Converts WGS84 lat/lon into the same Web Mercator pixel space used by
+  // OpenStreetMap/RainViewer tiles. This lets us position weather tiles around
+  // the airport without importing a map library.
   const sinLat = Math.sin((lat * Math.PI) / 180);
   const scale = TILE_SIZE * 2 ** zoom;
   return {
@@ -146,6 +154,8 @@ function timeAgo(utcIso) {
 }
 
 function feedStatus(query, timestamp, staleAfterMs) {
+  // React Query knows whether a request is loading/error; the timestamp tells
+  // us whether an otherwise successful feed is aging out operationally.
   if (query.isError) return { tone: 'error', label: 'Unavailable' };
   if (query.isLoading) return { tone: 'loading', label: 'Loading' };
   if (!timestamp) return { tone: 'warning', label: 'No timestamp' };
@@ -163,6 +173,9 @@ function cardinal(value) {
 }
 
 function runwayEnds(airport) {
+  // Airport runways arrive as physical runways ("18/36") with one heading per
+  // end. Flattening them into runway ends lets the wind logic compare every
+  // usable direction independently, which matters at multi-runway airports.
   return (airport?.runways || []).flatMap((runway) => {
     const ids = String(runway.id || '').split('/');
     return (runway.headings || []).map((heading, index) => ({
@@ -174,6 +187,9 @@ function runwayEnds(airport) {
 }
 
 function windComponents(windDir, windSpeed, runwayHeading) {
+  // Positive headwind means wind is helping the selected runway end. A negative
+  // value is a tailwind; crosswind is absolute because left/right side does not
+  // matter for the personal-minimum comparison shown here.
   if (windDir == null || runwayHeading == null) return { headwind: 0, crosswind: 0 };
   const angle = Math.abs(Number(windDir) - Number(runwayHeading));
   const wrapped = angle > 180 ? 360 - angle : angle;
@@ -185,14 +201,22 @@ function windComponents(windDir, windSpeed, runwayHeading) {
 }
 
 function bestRunwayFor(airport, metar) {
+  return runwayWindOptions(airport, metar)[0] || null;
+}
+
+function runwayWindOptions(airport, metar) {
   const ends = runwayEnds(airport);
-  if (!ends.length) return null;
+  if (!ends.length) return [];
   return ends
     .map((end) => ({ ...end, ...windComponents(metar?.wind_dir_deg, metar?.wind_speed_kt, end.heading) }))
-    .sort((a, b) => b.headwind - a.headwind || a.crosswind - b.crosswind)[0];
+    // Pilots generally prefer the greatest headwind component. If two runway
+    // ends have equal headwind, lower crosswind is the tie-breaker.
+    .sort((a, b) => b.headwind - a.headwind || a.crosswind - b.crosswind || String(a.id).localeCompare(String(b.id)));
 }
 
 function severeWeather(raw = '') {
+  // Lightweight METAR token scan for the hero SITREP. The deeper go/no-go
+  // module has similar logic but returns individual condition rows.
   const text = String(raw).toUpperCase();
   if (/(?:^|\s)(?:TS|TSRA|VCTS|\+RA|\+SHRA|FZRA|FZDZ|SQ|FC|GR|GS|WS)(?=\s|$)/.test(text)) return 'fail';
   if (/(?:^|\s)(?:LTG|CB|TCU|-?RA|SHRA|DZ)(?=\s|$)/.test(text)) return 'caution';
@@ -200,6 +224,8 @@ function severeWeather(raw = '') {
 }
 
 function classifyNotam(notam) {
+  // NOTAM text varies by source, so broad regex buckets are used for triage.
+  // The raw NOTAM is still shown in details for pilot verification.
   const text = `${notam.summary || ''} ${notam.raw || ''}`.toUpperCase();
   if (/(AD|AP|RWY|RUNWAY).*(CLSD|CLOSED)|CLSD.*(RWY|RUNWAY|AD|AP)/.test(text)) return 'Critical';
   if (/(RWY|RUNWAY|TWY|TAXIWAY|RAMP|APRON|CONSTRUCTION|WORK|CRANE|OBST|EQUIPMENT|MEN)/.test(text)) return 'Operational';
@@ -212,6 +238,8 @@ function summarizeNotam(notam) {
 }
 
 function evaluateSitrep({ metar, minimums, tfrs, notams, traffic }) {
+  // Produces one dashboard-level status from multiple feeds. The "level" value
+  // is deliberately simple: 0 favorable, 1 review, 2 not recommended.
   if (!metar) {
     return {
       status: 'unknown',
@@ -260,6 +288,9 @@ function evaluateSitrep({ metar, minimums, tfrs, notams, traffic }) {
 }
 
 function snapshotFrom({ metar, traffic, notams }) {
+  // A snapshot is the small set of values we compare across refreshes. Keeping
+  // this narrow avoids noisy "what changed" messages when unrelated feed fields
+  // churn.
   if (!metar) return null;
   return {
     at: new Date().toISOString(),
@@ -294,6 +325,8 @@ function usePreviousSnapshot(icao, snapshot) {
 }
 
 function changesFrom(previous, current) {
+  // Turns the previous/current local snapshots into human-readable deltas for
+  // the "What Changed?" card.
   if (!current) return ['Waiting for a current airport snapshot.'];
   if (!previous) return ['First snapshot for this airport on this device.'];
   const changes = [];
@@ -425,6 +458,8 @@ function SitrepHero({ airport, selectedIcao, sitrep, imageUrl }) {
 }
 
 function LiveDataStrip({ weatherQuery, trafficQuery, radarQuery, notamsQuery, airportQuery }) {
+  // This strip does not fetch anything itself. It only reads React Query state
+  // from the parent so the user can see which feeds are fresh, stale, or failed.
   const feeds = [
     ['Weather', feedStatus(weatherQuery, weatherQuery.data?.fetched_utc || weatherQuery.data?.metar?.observed_utc, 15 * 60 * 1000)],
     ['Traffic', feedStatus(trafficQuery, trafficQuery.data?.fetched_utc, 60 * 1000)],
@@ -463,6 +498,8 @@ function WeatherRadar({ airport }) {
   const centerTileX = Math.floor(centerWorld.x / TILE_SIZE);
   const centerTileY = Math.floor(centerWorld.y / TILE_SIZE);
   const tiles = [];
+  // Build a fixed tile grid around the airport. Each tile is positioned by the
+  // pixel offset between its world coordinate and the airport center.
   for (let x = centerTileX - 2; x <= centerTileX + 2; x += 1) {
     for (let y = centerTileY - 2; y <= centerTileY + 2; y += 1) tiles.push({ x, y });
   }
@@ -528,7 +565,10 @@ function WeatherCard({ airport, weather }) {
 
 function RunwayWindCard({ airport, weather }) {
   const metar = weather?.metar || {};
-  const best = bestRunwayFor(airport, metar);
+  // Data flow: airport.runways + weather.metar -> ranked runway ends -> main
+  // visual for the best runway plus a comparison table for the alternatives.
+  const runwayOptions = runwayWindOptions(airport, metar);
+  const best = runwayOptions[0] || null;
   const tailwind = best?.headwind < 0 ? Math.abs(best.headwind) : 0;
   const headwind = best?.headwind > 0 ? best.headwind : 0;
   const windDisplay = metar.wind_dir_deg == null ? 'VRB' : `${metar.wind_dir_deg} deg`;
@@ -544,7 +584,7 @@ function RunwayWindCard({ airport, weather }) {
         </div>
       </div>
       <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
-        <Metric label="Best aligned" value={best ? `RWY ${best.id}` : '--'} />
+        <Metric label="Best headwind" value={best ? `RWY ${best.id}` : '--'} />
         <Metric label="Wind" value={`${windDisplay} / ${metar.wind_speed_kt ?? '--'} kt`} />
         <Metric label="Headwind" value={`${headwind} kt`} />
         <Metric label="Tailwind" value={`${tailwind} kt`} />
@@ -555,46 +595,92 @@ function RunwayWindCard({ airport, weather }) {
         <div className="flex items-center justify-between gap-3"><span>Runway length</span><strong className="text-white">{best?.runway?.length_ft ? `${best.runway.length_ft.toLocaleString()} ft` : '--'}</strong></div>
         <div className="mt-2 flex items-center justify-between gap-3"><span>Surface</span><strong className="text-white">{best?.runway?.surface || 'Verify chart'}</strong></div>
       </div>
+      {runwayOptions.length > 1 ? (
+        <div className="runway-options mt-4">
+          <div className="runway-options-head">
+            <span>Runway</span>
+            <span>H/T</span>
+            <span>Xwind</span>
+          </div>
+          <div className="runway-options-list">
+            {runwayOptions.map((option) => {
+              const isBest = option.id === best?.id && option.runway?.id === best?.runway?.id;
+              const component = option.headwind >= 0 ? `H ${option.headwind}` : `T ${Math.abs(option.headwind)}`;
+              return (
+                <div key={`${option.runway?.id}-${option.id}`} className={`runway-option-row ${isBest ? 'active' : ''}`}>
+                  <strong>RWY {option.id}</strong>
+                  <span>{component} kt</span>
+                  <span>{option.crosswind} kt</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }
 
-function FuelIndex({ average, deltaPct, status, positionPct }) {
+function FuelIndex({ average, averageLabel = 'AirNav national avg', deltaPct, status, positionPct }) {
+  const comparisonText = status ? `${signedPct(deltaPct)} ${status}` : 'No comparison';
   return (
     <div className="fuel-index-row">
       <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-        <span className="text-slate-400">Regional avg {money(average)}</span>
-        <strong className={deltaPct <= -5 ? 'text-emerald-300' : deltaPct >= 5 ? 'text-red-300' : 'text-slate-300'}>{signedPct(deltaPct)} {status}</strong>
+        <span className="text-slate-400">{averageLabel} {money(average)}</span>
+        <strong className={deltaPct <= -5 ? 'text-emerald-300' : deltaPct >= 5 ? 'text-red-300' : 'text-slate-300'}>{comparisonText}</strong>
       </div>
       <div className="fuel-index flex-1"><span className="fuel-index-mid" /><span className="fuel-index-dot" style={{ left: `${positionPct ?? 50}%` }} /></div>
     </div>
   );
 }
 
-function FuelCard({ icao }) {
-  const fuel = useFuel(icao);
-  const fuels = fuel.data?.local?.fuels || [];
+function FuelCard({ fuel }) {
+  // The useFuel hook is owned by App so the same query object can also feed the
+  // source freshness card. This component only renders the local/market payload.
+  const local = fuel.data?.local;
+  const fuels = local?.fuels || [];
+  const sourceUrl = local?.source_url || fuel.data?.sources?.[0]?.url;
+  const emptyMessage = fuel.isLoading
+    ? 'Loading fuel prices...'
+    : fuel.isError
+      ? 'Fuel source unavailable.'
+      : local?.status_message || 'Fuel prices unavailable.';
+  const updatedLabel = local?.updated
+    ? `Updated ${local.updated}`
+    : local?.status === 'no_fuel'
+      ? 'No fuel listed'
+      : 'Price update unavailable';
   return (
     <Card title="Fuel Prices" icon={Fuel} className="area-fuel">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
         {fuels.length ? fuels.map((item) => (
-          <div key={item.code} className="fuel-price-row">
+          <div key={item.id || `${item.code}-${item.service}-${item.fbo}`} className="fuel-price-row">
             <div className="flex items-start justify-between gap-3">
-              <div><div className="font-black text-white">{item.label}</div><div className="text-xs text-slate-400">{item.service}</div></div>
+              <div>
+                <div className="font-black text-white">{item.label}</div>
+                <div className="text-xs text-slate-400">{[item.fbo, item.service].filter(Boolean).join(' - ')}</div>
+                <div className="mt-1 text-[11px] text-slate-500">{item.updated ? `Updated ${item.updated}` : item.guaranteed ? 'Guaranteed on AirNav' : 'Update date unavailable'}</div>
+              </div>
               <div className="text-right"><div className="text-2xl font-black text-white">{money(item.price_per_gal)}</div><div className="text-xs text-slate-400">per gal</div></div>
             </div>
-            <div className="mt-4"><FuelIndex average={item.regional_avg} deltaPct={item.market_delta_pct} status={item.market_status} positionPct={item.index_position_pct} /></div>
+            <div className="mt-4"><FuelIndex average={item.market_avg ?? item.regional_avg} averageLabel={item.market_reference_label} deltaPct={item.market_delta_pct} status={item.market_status} positionPct={item.index_position_pct} /></div>
           </div>
-        )) : <div className="rounded-md border border-white/10 bg-white/5 p-4 text-sm text-slate-300">{fuel.isLoading ? 'Loading fuel prices...' : 'Fuel prices unavailable.'}</div>}
+        )) : <div className="rounded-md border border-white/10 bg-white/5 p-4 text-sm text-slate-300">{emptyMessage}</div>}
       </div>
       <div className="mt-4 rounded-md border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
-        <div className="flex flex-wrap items-center justify-between gap-2"><span>Updated {fuel.data?.local?.updated || '--'}</span><a className="font-bold text-orange-400 hover:text-orange-300" href={fuel.data?.sources?.[0]?.url || '#'} target="_blank" rel="noreferrer">Source</a></div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>{updatedLabel}</span>
+          {sourceUrl ? <a className="font-bold text-orange-400 hover:text-orange-300" href={sourceUrl} target="_blank" rel="noreferrer">Source</a> : null}
+        </div>
+        {fuel.data?.warnings?.[0] ? <div className="mt-2 text-[11px] text-amber-200">{fuel.data.warnings[0]}</div> : null}
       </div>
     </Card>
   );
 }
 
 function NotamCard({ notams, airport, warning }) {
+  // Grouping happens client-side because the source function keeps NOTAM text
+  // normalized but intentionally avoids judging operational severity.
   const groups = ['Critical', 'Operational', 'Navigation', 'Informational'].map((label) => ({
     label,
     items: (notams || []).filter((notam) => classifyNotam(notam) === label),
@@ -687,6 +773,8 @@ function ChangesCard({ changes, previousSnapshot, currentSnapshot }) {
 }
 
 function SourceFreshnessCard({ airportQuery, weatherQuery, notamsQuery, trafficQuery, fuelQuery, radarQuery }) {
+  // One place to compare feed age across all hooks. The stale thresholds live
+  // in feedStatus; this card uses the fetch timestamps as display data.
   const rows = [
     ['Weather/METAR', weatherQuery.data?.fetched_utc, 'NOAA/AviationWeather'],
     ['NOTAMs', notamsQuery.data?.fetched_utc, 'FAA'],
@@ -720,6 +808,9 @@ function BottomStrip({ airport, weather }) {
 }
 
 export default function App() {
+  // Top-level data flow:
+  // selected ICAO -> data hooks -> normalized payloads -> focused dashboard cards.
+  // React Query owns request caching/refetching; App only coordinates the results.
   const [selectedIcao, setSelectedIcao] = useState(() => localStorage.getItem('preflight:selectedAirport') || normalizeAirportCode(import.meta.env.VITE_AIRPORT_ICAO || 'KVBT'));
   const airportQuery = useAirport(selectedIcao);
   const airport = airportQuery.data?.airport;
@@ -766,7 +857,7 @@ export default function App() {
           <div className="ops-layout sitrep-layout mt-5">
             <WeatherCard airport={airport} weather={weatherQuery.data} />
             <RunwayWindCard airport={airport} weather={weatherQuery.data} />
-            <FuelCard icao={selectedIcao} />
+            <FuelCard fuel={fuelQuery} />
             <TrafficScope airport={airport} className="area-traffic" />
             <NotamCard notams={notamsQuery.data?.notams || []} airport={airport} warning={notamsQuery.data?.warning} />
             <AirportOverviewCard airport={airport} />

@@ -26,11 +26,15 @@ export function ExpenseTracker() {
 
   const list = expenses.data || [];
   const logs = logbook.data || [];
+  // Expense projections depend on both stores: expenses provide dollars, while
+  // logbook entries provide the current hour denominator.
   const totalSpent = list.reduce((sum, expense) => sum + Number(expense.total || 0), 0);
   const hours = aggregateHours(logs);
   const projection = projectedTotalCost(list, hours.total);
   const filtered = list.filter((entry) => inRange(entry, range)).sort((a, b) => a.date.localeCompare(b.date));
   const chartData = (range === '8' ? filtered.slice(-8) : filtered).map((entry) => ({
+    // Recharts expects primitive numeric values, so normalize strings that came
+    // from form inputs before handing data to the chart.
     ...entry,
     label: entry.date.slice(5),
     total: Number(entry.total),
