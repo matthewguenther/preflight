@@ -1,7 +1,7 @@
 export function requireAuth(headers) {
   const expected = process.env.API_AUTH_TOKEN;
   if (!expected) {
-    return { ok: false, status: 500, message: 'Server misconfigured' };
+    return { ok: false, status: 500, message: 'Missing API_AUTH_TOKEN environment variable' };
   }
   const header = headers.get?.('authorization') || headers.authorization || headers.Authorization;
   const provided = header?.replace(/^Bearer\s+/i, '');

@@ -34,6 +34,7 @@ function normalizeMetar(metar) {
     wind_speed_kt: Number(metar.wspd || 0),
     wind_gust_kt: metar.wgst == null ? null : Number(metar.wgst),
     visibility_sm: visibility(metar.visib),
+    weather: metar.wxString || metar.wx || '',
     sky_condition: metar.cover || clouds.map((cloud) => `${cloud.cover}${cloud.base || ''}`).join(' ') || 'Unknown',
     ceiling_ft: ceiling?.base || null,
     temp_c: metar.temp == null ? null : Number(metar.temp),
@@ -56,7 +57,9 @@ function normalizeTaf(taf) {
       wind_dir_deg: Number.isFinite(Number(period.wdir)) ? Number(period.wdir) : null,
       wind_speed_kt: Number(period.wspd || 0),
       visibility_sm: visibility(period.visib),
+      weather: period.wxString || period.wx || period.weather || '',
       sky_condition: period.cover || period.clouds?.map?.((cloud) => `${cloud.cover}${cloud.base || ''}`).join(' ') || '',
+      ceiling_ft: period.clouds?.find?.((cloud) => ['BKN', 'OVC', 'VV'].includes(cloud.cover))?.base || null,
       flight_category: period.fltCat || '',
     })),
   };

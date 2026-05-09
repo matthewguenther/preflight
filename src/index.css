@@ -54,19 +54,58 @@ textarea {
 .brand-mark {
   position: relative;
   height: 28px;
-  width: 34px;
-  overflow: hidden;
-  border-radius: 4px;
-  transform: skewX(-16deg);
-  background: linear-gradient(90deg, #f04416 0 26%, #ffffff 26% 45%, #f04416 45% 62%, #d5dce7 62% 100%);
-  box-shadow: 0 0 28px rgba(240, 68, 22, 0.28);
+  width: 44px;
+  flex: 0 0 44px;
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  transform: scaleX(-1);
 }
 
 .brand-mark span {
   position: absolute;
-  inset: 4px 7px;
-  border-left: 3px solid rgba(2, 13, 26, 0.9);
-  border-right: 3px solid rgba(2, 13, 26, 0.9);
+  left: 6px;
+  top: 5px;
+  z-index: 2;
+  height: 18px;
+  width: 8px;
+  border: 2px solid rgba(248, 251, 255, 0.86);
+  border-right: 0;
+  border-radius: 999px 0 0 999px;
+  box-shadow: 0 0 14px rgba(240, 68, 22, 0.22);
+}
+
+.brand-mark::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 2px;
+  height: 24px;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f8fbff, #7da6cc);
+  box-shadow: 0 0 16px rgba(125, 166, 204, 0.34);
+}
+
+.brand-mark::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 5px;
+  height: 18px;
+  width: 30px;
+  clip-path: polygon(0 0, 100% 25%, 100% 75%, 0 100%);
+  background: repeating-linear-gradient(
+    90deg,
+    #f04416 0 7px,
+    #f8fbff 7px 12px,
+    #f04416 12px 19px,
+    #d5dce7 19px 25px
+  );
+  filter: drop-shadow(0 0 14px rgba(240, 68, 22, 0.28));
+  transform: rotate(-5deg);
+  transform-origin: left center;
 }
 
 .ops-nav-item {
@@ -176,9 +215,10 @@ textarea {
   gap: 1rem;
   align-items: stretch;
   grid-template-areas:
-    "readiness readiness readiness weather weather weather traffic traffic traffic traffic lesson lesson"
-    "readiness readiness readiness weather weather weather traffic traffic traffic traffic checkride checkride"
-    "progress progress progress progress aircraft aircraft aircraft aircraft aircraft fuel fuel fuel"
+    "readiness readiness readiness weather weather weather traffic traffic traffic traffic traffic traffic"
+    "fuel fuel fuel aircraft aircraft aircraft traffic traffic traffic traffic traffic traffic"
+    "lesson lesson lesson checkride checkride checkride traffic traffic traffic traffic traffic traffic"
+    "progress progress progress progress expenses expenses expenses logbook logbook logbook logbook logbook"
     "ground ground ground ground expenses expenses expenses logbook logbook logbook logbook logbook";
 }
 
@@ -464,15 +504,15 @@ textarea {
   font-weight: 600;
 }
 
-@media (max-width: 1300px) {
+@media (max-width: 1980px) {
   .ops-layout {
     grid-template-columns: repeat(6, minmax(0, 1fr));
     grid-template-areas:
       "readiness readiness readiness weather weather weather"
       "traffic traffic traffic traffic traffic traffic"
+      "fuel fuel fuel aircraft aircraft aircraft"
       "lesson lesson lesson checkride checkride checkride"
-      "progress progress progress aircraft aircraft aircraft"
-      "fuel fuel fuel expenses expenses expenses"
+      "progress progress progress expenses expenses expenses"
       "ground ground ground logbook logbook logbook";
   }
 }
@@ -504,9 +544,9 @@ textarea {
     grid-template-areas:
       "readiness weather"
       "traffic traffic"
+      "fuel aircraft"
       "lesson checkride"
-      "progress aircraft"
-      "fuel expenses"
+      "progress expenses"
       "ground logbook";
   }
 
@@ -523,11 +563,11 @@ textarea {
       "readiness"
       "weather"
       "traffic"
+      "fuel"
       "lesson"
+      "aircraft"
       "checkride"
       "progress"
-      "aircraft"
-      "fuel"
       "ground"
       "expenses"
       "logbook";

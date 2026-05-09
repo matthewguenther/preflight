@@ -9,7 +9,66 @@ function nearLimit(value, limit, marginPct, direction = 'max') {
   return direction === 'max' ? value >= limit - margin : value <= limit + margin;
 }
 
-export function evaluateGoNoGo(metar, minimums, tfrs = []) {
+function text(value) {
+  return String(value || '').toUpperCase();
+}
+
+function observedWeatherHazards(metar) {
+  const raw = text(metar.raw);
+  const presentWeather = text(metar.weather || metar.wx_string || metar.wxString);
+  const combined = `${presentWeather} ${raw}`;
+  const hazards = [];
+
+  if (/(?:^|\s)(?:WS|FZRA|FZDZ|SQ|FC|GR|GS|\+RA|\+SHRA|\+TSRA|\+TS)(?=\s|$)/.test(combined)) {
+    hazards.push(condition('weather hazard', 'fail', 'Severe precip / wind shear', 'Avoid training flight'));
+  } else if (/(?:^|\s)(?:TS|TSRA|VCTS)(?=\s|$)/.test(combined)) {
+    hazards.push(condition('thunderstorm', 'fail', 'Thunderstorm reported', 'Avoid training flight'));
+  }
+
+  if (/(?:^|\s)(?:LTG|CB|TCU)(?=\s|$)/.test(combined)) {
+    hazards.push(condition('convective weather', 'caution', raw.includes('LTG') ? 'Lightning reported nearby' : 'Convective clouds reported', 'Review radar / briefing'));
+  }
+
+  if (/(?:^|\s)(?:-?RA|SHRA|DZ)(?=\s|$)/.test(combined) && !/(?:^|\s)(?:\+RA|\+SHRA|\+TSRA)(?=\s|$)/.test(combined)) {
+    hazards.push(condition('precipitation', 'caution', 'Rain/showers reported', 'Review radar / briefing'));
+  }
+
+  return hazards;
+}
+
+function tafHazards(taf, minimums) {
+  const periods = Array.isArray(taf?.periods) ? taf.periods : [];
+  const now = Date.now();
+  const lookahead = now + 3 * 60 * 60 * 1000;
+
+  return periods
+    .filter((period) => {
+      const from = period.from_utc ? Date.parse(period.from_utc) : now;
+      const to = period.to_utc ? Date.parse(period.to_utc) : lookahead;
+      return Number.isFinite(from) && Number.isFinite(to) && from <= lookahead && to >= now;
+    })
+    .slice(0, 3)
+    .flatMap((period) => {
+      const hazards = [];
+      const ceiling = period.ceiling_ft ?? 12000;
+      const visibility = Number(period.visibility_sm ?? 10);
+      const wind = Number(period.wind_speed_kt ?? 0);
+      const weather = text(`${period.weather || ''} ${period.sky_condition || ''}`);
+
+      if (period.flight_category && period.flight_category !== 'VFR') {
+        hazards.push(condition('forecast category', 'caution', period.flight_category, 'VFR expected'));
+      }
+      if (ceiling < minimums.ceiling_ft || visibility < minimums.visibility_sm || wind > minimums.wind_kt) {
+        hazards.push(condition('forecast trend', 'caution', 'Below personal mins within 3 hr', 'Review TAF'));
+      }
+      if (/(?:^|\s)(?:TS|TSRA|VCTS|CB|\+RA|SHRA|RA)(?=\s|$)/.test(weather)) {
+        hazards.push(condition('forecast weather', 'caution', 'Convective/precip risk within 3 hr', 'Review TAF/radar'));
+      }
+      return hazards;
+    });
+}
+
+export function evaluateGoNoGo(metar, minimums, tfrs = [], taf = null) {
   if (!metar || !minimums) {
     return { status: 'no_go', conditions: [condition('weather', 'fail', 'Unavailable', 'Required')] };
   }
@@ -28,6 +87,13 @@ export function evaluateGoNoGo(metar, minimums, tfrs = []) {
   } else {
     conditions.push(condition('flight category', 'pass', 'VFR', 'VFR only'));
   }
+
+  const observedHazards = observedWeatherHazards(metar);
+  observedHazards.forEach((item) => {
+    conditions.push(item);
+    if (item.status === 'fail') status = 'no_go';
+    if (status !== 'no_go' && item.status === 'caution') status = 'caution';
+  });
 
   const checks = [
     {
@@ -69,6 +135,12 @@ export function evaluateGoNoGo(metar, minimums, tfrs = []) {
     conditions.push(condition(check.name, checkStatus, check.display, check.limit));
     if (check.fail) status = 'no_go';
     if (status !== 'no_go' && check.caution) status = 'caution';
+  });
+
+  const forecastHazards = tafHazards(taf, minimums);
+  forecastHazards.forEach((item) => {
+    conditions.push(item);
+    if (status !== 'no_go') status = 'caution';
   });
 
   const nearbyActiveTfr = tfrs.find((tfr) => tfr.active && Number(tfr.distance_nm) <= 25);

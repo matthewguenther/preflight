@@ -173,7 +173,7 @@ function Hero() {
   const weather = useWeather();
   const tfr = useTfr();
   const minimums = useBlob('config', 'personal_minimums');
-  const result = evaluateGoNoGo(weather.data?.metar, minimums.data, tfr.data?.tfrs_nearby || []);
+  const result = evaluateGoNoGo(weather.data?.metar, minimums.data, tfr.data?.tfrs_nearby || [], weather.data?.taf);
   const headline = result.status === 'go' ? "You're cleared for takeoff." : result.status === 'caution' ? 'Review before takeoff.' : 'Hold short for now.';
   const subtext = result.status === 'go' ? 'Conditions look good for training at KVBT. Fly safe and have a great flight.' : 'Check weather, airspace, and personal minimums before committing.';
 
@@ -206,14 +206,15 @@ function FlightReadinessCard() {
   const weather = useWeather();
   const tfr = useTfr();
   const minimums = useBlob('config', 'personal_minimums');
-  const result = evaluateGoNoGo(weather.data?.metar, minimums.data, tfr.data?.tfrs_nearby || []);
+  const result = evaluateGoNoGo(weather.data?.metar, minimums.data, tfr.data?.tfrs_nearby || [], weather.data?.taf);
   const status = result.status === 'go' ? 'GO' : result.status === 'caution' ? 'CAUTION' : 'NO-GO';
-  const statusClass = result.status === 'caution' ? 'text-2xl font-black tracking-wide' : 'text-5xl font-black';
   return (
     <Card title="Today's Flight Readiness" icon={Plane} className="area-readiness">
-      <div className={`${statusClass} ${result.status === 'go' ? 'text-emerald-400' : result.status === 'caution' ? 'text-amber-300' : 'text-red-300'}`}>
-        {status}
-        <span className="ml-3 align-middle text-xs font-semibold text-slate-300">VFR - Student Pilot - Day</span>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <div className={`text-2xl font-black tracking-wide ${result.status === 'go' ? 'text-emerald-400' : result.status === 'caution' ? 'text-amber-300' : 'text-red-300'}`}>
+          {status}
+        </div>
+        <span className="text-xs font-semibold text-slate-300">VFR - Student Pilot - Day</span>
       </div>
       <div className="mt-4 space-y-2">
         {result.conditions.slice(0, 6).map((item) => (
@@ -499,8 +500,30 @@ function ExpensesCard() {
   );
 }
 
+function fuelStatusTone(deltaPct) {
+  if (deltaPct <= -5) return 'text-emerald-300';
+  if (deltaPct >= 5) return 'text-red-300';
+  return 'text-slate-300';
+}
+
+function FuelIndex({ label, average, deltaPct, status, positionPct }) {
+  return (
+    <div className="fuel-index-row">
+      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+        <span className="text-slate-400">{label} avg {money(average)}</span>
+        <strong className={fuelStatusTone(deltaPct)}>{signedPct(deltaPct)} {status}</strong>
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="fuel-index flex-1">
+          <span className="fuel-index-mid" />
+          <span className="fuel-index-dot" style={{ left: `${positionPct ?? 50}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FuelPriceRow({ fuel }) {
-  const statusTone = fuel.market_delta_pct <= -5 ? 'text-emerald-300' : fuel.market_delta_pct >= 5 ? 'text-amber-300' : 'text-slate-300';
   return (
     <div className="fuel-price-row">
       <div className="flex items-start justify-between gap-3">
@@ -513,13 +536,14 @@ function FuelPriceRow({ fuel }) {
           <div className="text-xs text-slate-400">per gal</div>
         </div>
       </div>
-      <div className="fuel-index mt-3">
-        <span className="fuel-index-mid" />
-        <span className="fuel-index-dot" style={{ left: `${fuel.index_position_pct ?? 50}%` }} />
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-        <span className="text-slate-400">Southern avg {money(fuel.regional_avg)}</span>
-        <strong className={statusTone}>{signedPct(fuel.market_delta_pct)} {fuel.market_status}</strong>
+      <div className="mt-4 space-y-3">
+        <FuelIndex
+          label="Southern"
+          average={fuel.regional_avg}
+          deltaPct={fuel.market_delta_pct}
+          status={fuel.market_status}
+          positionPct={fuel.index_position_pct}
+        />
       </div>
     </div>
   );
@@ -607,11 +631,11 @@ export default function App() {
             <FlightReadinessCard />
             <WeatherCard />
             <TrafficScope title="Local Traffic (ADS-B)" className="area-traffic" compact />
+            <FuelCostCard />
             <NextLessonCard />
+            <AircraftCard />
             <CheckrideCard />
             <TrainingProgressCard />
-            <AircraftCard />
-            <FuelCostCard />
             <GroundSchoolCard />
             <ExpensesCard />
             <LogbookSummaryCard />

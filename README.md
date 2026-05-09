@@ -15,6 +15,16 @@ Preflight is a personal Private Pilot License training dashboard for KVBT / Thad
 
 Connect the GitHub repo to a Netlify site. In the Netlify UI, set the same environment variables from `.env.local` without committing that file. Pushes to `main` will build with `npm run build` and publish `dist`.
 
+Required Netlify environment variables:
+
+- `API_AUTH_TOKEN`: server-side token used by Netlify Functions.
+- `VITE_API_AUTH_TOKEN`: browser-side token sent to Netlify Functions. This must exactly match `API_AUTH_TOKEN` and must be present before the Vite build runs.
+- `VITE_AIRPORT_ICAO`: optional, defaults to `KVBT`.
+- `FAA_NOTAM_CLIENT_ID` and `FAA_NOTAM_CLIENT_SECRET`: optional, only needed for live NOTAM data.
+- `FSP_API_KEY` and `FSP_CLUB_ID`: optional, only if Flight Schedule Pro API access is available.
+
+After changing any `VITE_` variable in Netlify, trigger a new deploy so the value is embedded into the frontend bundle.
+
 ## Backup Strategy
 
 Use the in-app Download backup button. It calls `/.netlify/functions/export` and saves `preflight-backup-YYYY-MM-DD.json`. A monthly local backup is recommended.

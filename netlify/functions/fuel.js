@@ -102,17 +102,30 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function comparison(price, reference) {
+  const deltaPct = reference?.avg ? ((price - reference.avg) / reference.avg) * 100 : 0;
+  return {
+    avg: reference?.avg ?? null,
+    delta_pct: Math.round(deltaPct * 10) / 10,
+    status: deltaPct <= -5 ? 'below average' : deltaPct >= 5 ? 'above average' : 'near average',
+    index_position_pct: clamp(50 + deltaPct * 2, 4, 96),
+  };
+}
+
 function addIndex(fuel, market) {
-  const reference = market.regional[fuel.code];
-  const deltaPct = reference?.avg ? ((fuel.price_per_gal - reference.avg) / reference.avg) * 100 : 0;
-  const status = deltaPct <= -5 ? 'below average' : deltaPct >= 5 ? 'above average' : 'near average';
+  const regional = comparison(fuel.price_per_gal, market.regional[fuel.code]);
+  const national = comparison(fuel.price_per_gal, market.nationwide[fuel.code]);
+
   return {
     ...fuel,
-    regional_avg: reference?.avg ?? null,
-    national_avg: market.nationwide[fuel.code]?.avg ?? null,
-    market_delta_pct: Math.round(deltaPct * 10) / 10,
-    market_status: status,
-    index_position_pct: clamp(50 + deltaPct * 2, 4, 96),
+    regional_avg: regional.avg,
+    national_avg: national.avg,
+    market_delta_pct: regional.delta_pct,
+    market_status: regional.status,
+    index_position_pct: regional.index_position_pct,
+    national_delta_pct: national.delta_pct,
+    national_market_status: national.status,
+    national_index_position_pct: national.index_position_pct,
   };
 }
 
