@@ -359,25 +359,26 @@ textarea {
 
 .ops-layout {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   grid-auto-rows: minmax(168px, auto);
   gap: 1rem;
   align-items: stretch;
   grid-template-areas:
-    "readiness readiness readiness weather weather weather traffic traffic traffic traffic traffic traffic"
-    "fuel fuel fuel aircraft aircraft aircraft traffic traffic traffic traffic traffic traffic"
-    "lesson lesson lesson checkride checkride checkride traffic traffic traffic traffic traffic traffic"
-    "progress progress progress progress expenses expenses expenses logbook logbook logbook logbook logbook"
-    "ground ground ground ground expenses expenses expenses logbook logbook logbook logbook logbook";
+    "readiness readiness readiness weather weather weather"
+    "traffic traffic traffic traffic traffic traffic"
+    "fuel fuel fuel aircraft aircraft aircraft"
+    "lesson lesson lesson checkride checkride checkride"
+    "progress progress progress expenses expenses expenses"
+    "ground ground ground logbook logbook logbook";
 }
 
 .sitrep-layout {
   grid-template-areas:
-    "weather weather weather weather runway runway runway overview overview overview alternates alternates"
-    "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams"
-    "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams"
-    "changes changes changes changes changes changes notams notams notams notams notams notams"
-    "fuel fuel fuel fuel fuel fuel sources sources sources sources sources sources";
+    "weather weather weather runway runway runway"
+    "traffic traffic traffic traffic traffic traffic"
+    "notams notams notams overview overview overview"
+    "alternates alternates alternates changes changes changes"
+    "fuel fuel fuel sources sources sources";
 }
 
 .area-readiness {
@@ -941,26 +942,24 @@ textarea {
   font-weight: 600;
 }
 
-@media (max-width: 1980px) {
+@media (min-width: 2400px) {
   .ops-layout:not(.sitrep-layout) {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     grid-template-areas:
-      "readiness readiness readiness weather weather weather"
-      "traffic traffic traffic traffic traffic traffic"
-      "fuel fuel fuel aircraft aircraft aircraft"
-      "lesson lesson lesson checkride checkride checkride"
-      "progress progress progress expenses expenses expenses"
-      "ground ground ground logbook logbook logbook";
+      "readiness readiness readiness weather weather weather traffic traffic traffic traffic traffic traffic"
+      "fuel fuel fuel aircraft aircraft aircraft traffic traffic traffic traffic traffic traffic"
+      "lesson lesson lesson checkride checkride checkride traffic traffic traffic traffic traffic traffic"
+      "progress progress progress progress expenses expenses expenses logbook logbook logbook logbook logbook"
+      "ground ground ground ground expenses expenses expenses logbook logbook logbook logbook logbook";
   }
 
   .sitrep-layout {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     grid-template-areas:
-      "weather weather weather runway runway runway"
-      "traffic traffic traffic traffic traffic traffic"
-      "notams notams notams overview overview overview"
-      "alternates alternates alternates changes changes changes"
-      "fuel fuel fuel sources sources sources";
+      "weather weather weather runway runway runway overview overview overview alternates alternates alternates"
+      "weather weather weather fuel fuel fuel sources sources sources changes changes changes"
+      "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams"
+      "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams";
   }
 }
 
