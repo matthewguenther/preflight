@@ -1,12 +1,12 @@
 import {
+  AlertTriangle,
   Bell,
-  BookOpen,
-  CalendarDays,
+  Bookmark,
   ChevronDown,
-  ClipboardCheck,
+  ClipboardList,
   Cloud,
-  Download,
-  FileText,
+  Compass,
+  Database,
   Fuel,
   Gauge,
   Headphones,
@@ -14,39 +14,46 @@ import {
   MapPin,
   Plane,
   RadioTower,
+  Search,
   Settings,
-  Sun,
-  Trophy,
-  Wallet,
   Wind,
-  Wrench,
 } from 'lucide-react';
-import { useState } from 'react';
-import { ExpenseEntryForm } from './components/forms/ExpenseEntryForm';
-import { LogbookEntryForm } from './components/forms/LogbookEntryForm';
-import { Modal } from './components/forms/Modal';
-import { NextLessonForm } from './components/forms/NextLessonForm';
-import { PracticeTestForm } from './components/forms/PracticeTestForm';
+import { useEffect, useMemo, useState } from 'react';
+import { TrafficScope } from './components/panels/TrafficScope';
+import { useAirport, normalizeAirportCode } from './hooks/useAirport';
+import { useAirportImage } from './hooks/useAirportImage';
 import { useBlob } from './hooks/useBlobs';
 import { useFuel } from './hooks/useFuel';
-import { useLesson } from './hooks/useLesson';
+import { useNotams } from './hooks/useNotams';
 import { useRadar } from './hooks/useRadar';
 import { useTfr } from './hooks/useTfr';
+import { useTraffic } from './hooks/useTraffic';
 import { useWeather } from './hooks/useWeather';
-import { aggregateHours, computeReadiness, projectedTotalCost } from './lib/checkride';
-import { AIRPORT, FLEET, PRIMARY_AIRCRAFT, labelize } from './lib/constants';
 import { densityAltitude } from './lib/densityAlt';
-import { evaluateGoNoGo } from './lib/goNoGo';
 import { formatLocal, todayLocalISO } from './lib/time';
-import { apiFetch } from './lib/api';
-import { TrafficScope } from './components/panels/TrafficScope';
 
 const HERO_IMAGE = 'https://images.squarespace-cdn.com/content/v1/67f3ee1006d37e724190ac27/2eac87a2-5c81-4d45-a6ea-e56aca8203ad/Thaden-Exteriors-HR-007.jpg';
-const ATC_AUDIO_URL = 'https://www.liveatc.net/search/?icao=kvbt';
-const AIRPORT_DIAGRAM_URL = 'https://skyvector.com/airport/VBT/Bentonville-Municipal-Louise-M-Thaden-Field-Airport';
-const PPL_ACS_URL = 'https://www.faa.gov/training_testing/testing/acs/private_airplane_acs_6.pdf';
 const RADAR_ZOOM = 7;
 const TILE_SIZE = 256;
+const STATE_NAMES = {
+  AR: 'Arkansas',
+  OK: 'Oklahoma',
+  MO: 'Missouri',
+  TX: 'Texas',
+  KS: 'Kansas',
+  CA: 'California',
+  FL: 'Florida',
+  NY: 'New York',
+};
+const FREQUENCY_FALLBACKS = {
+  KVBT: [
+    { label: 'CTAF/UNICOM', value: '122.975' },
+    { label: 'WX AWOS-3PT', value: '134.975' },
+    { label: 'RAZORBACK APPROACH', value: '121.0' },
+    { label: 'RAZORBACK DEPARTURE', value: '121.0' },
+    { label: 'CLEARANCE DELIVERY', value: '121.05' },
+  ],
+};
 
 function money(value) {
   return value == null ? '--' : `$${Number(value).toFixed(2)}`;
@@ -58,8 +65,64 @@ function signedPct(value) {
   return `${Number(value) > 0 ? '+' : Number(value) < 0 ? '-' : ''}${rounded}%`;
 }
 
-function flightAwareAircraftUrl(tail) {
-  return `https://www.flightaware.com/live/flight/${encodeURIComponent(tail)}`;
+function titleCase(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/\bNtl\b/g, 'National')
+    .replace(/\bMuni\b/g, 'Municipal')
+    .replace(/\bFld\b/g, 'Field');
+}
+
+function airportName(airport) {
+  if (!airport) return 'Airport';
+  const raw = airport.name || airport.city || airport.icao;
+  const parts = raw.split('/').map((item) => titleCase(item.trim())).filter(Boolean);
+  return parts.length > 1 ? parts.slice(1).join(' / ') : parts[0] || airport.icao;
+}
+
+function airportPlace(airport) {
+  if (!airport) return '';
+  const city = titleCase(airport.city?.split('/')?.[0] || airport.name?.split('/')?.[0] || '');
+  const state = STATE_NAMES[airport.state] || airport.state || airport.country || '';
+  return [city, state].filter(Boolean).join(', ');
+}
+
+function airportFrequencies(airport) {
+  if (Array.isArray(airport?.frequencies) && airport.frequencies.length) {
+    return airport.frequencies.filter((item) => item?.label || item?.value);
+  }
+  const parsed = String(airport?.freqs || '-')
+    .split(';')
+    .map((item) => {
+      const parts = item.split(',').map((part) => part.trim()).filter(Boolean);
+      if (!parts.length || parts[0] === '-') return null;
+      return {
+        label: parts[0].toUpperCase(),
+        value: parts.slice(1).join(', ') || parts[0],
+      };
+    })
+    .filter(Boolean);
+  if (parsed.length) return parsed;
+  return airport?.icao ? FREQUENCY_FALLBACKS[normalizeAirportCode(airport.icao)] || [] : [];
+}
+
+function skyVectorUrl(airport) {
+  const id = airport?.faa_id || airport?.icao?.replace(/^K/, '') || airport?.icao || '';
+  return `https://skyvector.com/airport/${encodeURIComponent(id)}`;
+}
+
+function liveAtcUrl(airport) {
+  return `https://www.liveatc.net/search/?icao=${encodeURIComponent(String(airport?.icao || 'KVBT').toLowerCase())}`;
+}
+
+function aviationWeatherUrl(airport) {
+  return `https://aviationweather.gov/data/metar/?id=${encodeURIComponent(airport?.icao || 'KVBT')}&hours=0&taf=on`;
+}
+
+function faaNotamSearchUrl(airport) {
+  return `https://notams.aim.faa.gov/notamSearch/nsapp.html#/${encodeURIComponent(airport?.icao || 'KVBT')}`;
 }
 
 function lonLatToWorld(lat, lon, zoom = RADAR_ZOOM) {
@@ -69,6 +132,180 @@ function lonLatToWorld(lat, lon, zoom = RADAR_ZOOM) {
     x: ((lon + 180) / 360) * scale,
     y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
   };
+}
+
+function timeAgo(utcIso) {
+  if (!utcIso) return 'Unavailable';
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(utcIso).getTime()) / 1000));
+  if (seconds < 90) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return `${hours} hr ago`;
+  return formatLocal(utcIso, 'MMM d, h:mm a');
+}
+
+function feedStatus(query, timestamp, staleAfterMs) {
+  if (query.isError) return { tone: 'error', label: 'Unavailable' };
+  if (query.isLoading) return { tone: 'loading', label: 'Loading' };
+  if (!timestamp) return { tone: 'warning', label: 'No timestamp' };
+  const age = Date.now() - new Date(timestamp).getTime();
+  return {
+    tone: age > staleAfterMs ? 'warning' : 'live',
+    label: age > staleAfterMs ? `Stale ${timeAgo(timestamp)}` : timeAgo(timestamp),
+  };
+}
+
+function cardinal(value) {
+  if (value == null) return '--';
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round(Number(value) / 45) % 8];
+}
+
+function runwayEnds(airport) {
+  return (airport?.runways || []).flatMap((runway) => {
+    const ids = String(runway.id || '').split('/');
+    return (runway.headings || []).map((heading, index) => ({
+      runway,
+      id: ids[index] || `${Math.round(heading / 10)}`,
+      heading,
+    }));
+  });
+}
+
+function windComponents(windDir, windSpeed, runwayHeading) {
+  if (windDir == null || runwayHeading == null) return { headwind: 0, crosswind: 0 };
+  const angle = Math.abs(Number(windDir) - Number(runwayHeading));
+  const wrapped = angle > 180 ? 360 - angle : angle;
+  const radians = (wrapped * Math.PI) / 180;
+  return {
+    headwind: Math.round(Number(windSpeed || 0) * Math.cos(radians) * 10) / 10,
+    crosswind: Math.round(Math.abs(Number(windSpeed || 0) * Math.sin(radians)) * 10) / 10,
+  };
+}
+
+function bestRunwayFor(airport, metar) {
+  const ends = runwayEnds(airport);
+  if (!ends.length) return null;
+  return ends
+    .map((end) => ({ ...end, ...windComponents(metar?.wind_dir_deg, metar?.wind_speed_kt, end.heading) }))
+    .sort((a, b) => b.headwind - a.headwind || a.crosswind - b.crosswind)[0];
+}
+
+function severeWeather(raw = '') {
+  const text = String(raw).toUpperCase();
+  if (/(?:^|\s)(?:TS|TSRA|VCTS|\+RA|\+SHRA|FZRA|FZDZ|SQ|FC|GR|GS|WS)(?=\s|$)/.test(text)) return 'fail';
+  if (/(?:^|\s)(?:LTG|CB|TCU|-?RA|SHRA|DZ)(?=\s|$)/.test(text)) return 'caution';
+  return 'clear';
+}
+
+function classifyNotam(notam) {
+  const text = `${notam.summary || ''} ${notam.raw || ''}`.toUpperCase();
+  if (/(AD|AP|RWY|RUNWAY).*(CLSD|CLOSED)|CLSD.*(RWY|RUNWAY|AD|AP)/.test(text)) return 'Critical';
+  if (/(RWY|RUNWAY|TWY|TAXIWAY|RAMP|APRON|CONSTRUCTION|WORK|CRANE|OBST|EQUIPMENT|MEN)/.test(text)) return 'Operational';
+  if (/(PAPI|VASI|ILS|LOC|GS|VOR|NDB|RNAV|GPS|NAV|LIGHT|LGT|MALSR|REIL|APPROACH)/.test(text)) return 'Navigation';
+  return 'Informational';
+}
+
+function summarizeNotam(notam) {
+  return String(notam.summary || notam.raw || 'NOTAM text unavailable').replace(/\s+/g, ' ').slice(0, 180);
+}
+
+function evaluateSitrep({ metar, minimums, tfrs, notams, traffic }) {
+  if (!metar) {
+    return {
+      status: 'unknown',
+      label: 'Unknown',
+      tone: 'text-slate-200',
+      summary: 'Insufficient data for an airport SITREP.',
+      bullets: ['Weather data unavailable', 'Verify official sources before flight'],
+    };
+  }
+
+  const bullets = [];
+  let level = 0;
+  const hazard = severeWeather(metar.raw);
+  if (metar.flight_category && metar.flight_category !== 'VFR') {
+    level = Math.max(level, 1);
+    bullets.push(`${metar.flight_category} reported`);
+  }
+  if (hazard === 'fail') {
+    level = Math.max(level, 2);
+    bullets.push('Thunderstorm/heavy weather signal in METAR');
+  } else if (hazard === 'caution') {
+    level = Math.max(level, 1);
+    bullets.push('Precipitation or convective weather reported nearby');
+  }
+  if (minimums && Number(metar.wind_speed_kt || 0) > Number(minimums.wind_kt || 999)) {
+    level = Math.max(level, 1);
+    bullets.push('Surface wind exceeds saved personal limit');
+  }
+  const activeTfr = (tfrs || []).find((tfr) => tfr.active && Number(tfr.distance_nm) <= 25);
+  if (activeTfr) {
+    level = Math.max(level, 1);
+    bullets.push('Nearby active TFR requires review');
+  }
+  const criticalNotams = (notams || []).filter((notam) => classifyNotam(notam) === 'Critical').length;
+  if (criticalNotams) {
+    level = Math.max(level, 2);
+    bullets.push(`${criticalNotams} critical NOTAM${criticalNotams > 1 ? 's' : ''}`);
+  }
+  const lowTraffic = (traffic || []).filter((ac) => Number(ac.altitude_ft) > 0 && Number(ac.altitude_ft) <= 3500).length;
+  if (lowTraffic) bullets.push(`${lowTraffic} low-altitude aircraft nearby`);
+
+  if (!bullets.length) bullets.push('Winds/weather appear within selected limits', 'No critical alerts found in loaded data');
+  if (level === 2) return { status: 'not_recommended', label: 'Not Recommended', tone: 'text-red-300', summary: 'Conditions or alerts are outside selected limits.', bullets };
+  if (level === 1) return { status: 'review', label: 'Review', tone: 'text-amber-300', summary: 'Review current conditions and official sources.', bullets };
+  return { status: 'favorable', label: 'Favorable', tone: 'text-emerald-300', summary: 'Good conditions for VFR operations based on loaded data.', bullets };
+}
+
+function snapshotFrom({ metar, traffic, notams }) {
+  if (!metar) return null;
+  return {
+    at: new Date().toISOString(),
+    wind_dir_deg: metar.wind_dir_deg ?? null,
+    wind_speed_kt: metar.wind_speed_kt ?? null,
+    ceiling_ft: metar.ceiling_ft ?? null,
+    visibility_sm: metar.visibility_sm ?? null,
+    altimeter_inhg: metar.altimeter_inhg ?? null,
+    flight_category: metar.flight_category ?? null,
+    aircraft_count: traffic?.length ?? null,
+    notam_count: notams?.length ?? null,
+  };
+}
+
+function usePreviousSnapshot(icao, snapshot) {
+  const [previous, setPrevious] = useState(null);
+  const snapshotKey = useMemo(() => JSON.stringify(snapshot), [snapshot]);
+
+  useEffect(() => {
+    if (!snapshot || !icao) return;
+    const key = `preflight:sitrep:${icao}`;
+    const prior = localStorage.getItem(key);
+    try {
+      setPrevious(prior ? JSON.parse(prior) : null);
+    } catch {
+      setPrevious(null);
+    }
+    localStorage.setItem(key, snapshotKey);
+  }, [icao, snapshot, snapshotKey]);
+
+  return previous;
+}
+
+function changesFrom(previous, current) {
+  if (!current) return ['Waiting for a current airport snapshot.'];
+  if (!previous) return ['First snapshot for this airport on this device.'];
+  const changes = [];
+  if (previous.wind_dir_deg != null && current.wind_dir_deg != null) {
+    const shift = Math.abs(current.wind_dir_deg - previous.wind_dir_deg);
+    if (shift >= 10) changes.push(`Wind shifted ${shift > 180 ? 360 - shift : shift} deg`);
+  }
+  if (previous.ceiling_ft !== current.ceiling_ft) changes.push(`Ceiling changed from ${previous.ceiling_ft || 'unlimited'} ft to ${current.ceiling_ft || 'unlimited'} ft`);
+  if (previous.aircraft_count != null && current.aircraft_count != null && previous.aircraft_count !== current.aircraft_count) changes.push(`${Math.abs(current.aircraft_count - previous.aircraft_count)} ${current.aircraft_count > previous.aircraft_count ? 'new' : 'fewer'} nearby aircraft`);
+  if (previous.notam_count != null && current.notam_count != null && previous.notam_count !== current.notam_count) changes.push(`${Math.abs(current.notam_count - previous.notam_count)} ${current.notam_count > previous.notam_count ? 'new' : 'fewer'} NOTAMs`);
+  if (previous.altimeter_inhg != null && current.altimeter_inhg != null && previous.altimeter_inhg !== current.altimeter_inhg) changes.push(`Altimeter changed from ${previous.altimeter_inhg} to ${current.altimeter_inhg}`);
+  return changes.length ? changes : ['No material change since the last loaded snapshot.'];
 }
 
 function Card({ title, icon: Icon, action, children, className = '' }) {
@@ -87,25 +324,27 @@ function Card({ title, icon: Icon, action, children, className = '' }) {
 }
 
 function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
   const items = [
     [Home, 'Dashboard'],
-    [Plane, 'Flights'],
-    [BookOpen, 'Logbook'],
-    [FileText, 'Ground School'],
-    [ClipboardCheck, 'Checkrides'],
-    [Wrench, 'Aircraft'],
-    [Wallet, 'Expenses'],
+    [MapPin, 'Airports'],
+    [Plane, 'Radar'],
+    [Cloud, 'Weather'],
+    [ClipboardList, 'NOTAMs'],
+    [Fuel, 'Fuel'],
+    [Compass, 'Alternates'],
+    [Bookmark, 'Saved'],
     [Settings, 'Settings'],
   ];
   return (
-    <aside className="ops-sidebar">
-      <div className="flex items-center gap-3 px-4 pt-6">
+    <aside className={`ops-sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <button className="flex items-center gap-3 px-4 pt-6 text-left" onClick={() => setCollapsed((value) => !value)} title="Toggle sidebar" type="button">
         <div className="brand-mark"><span /></div>
-        <div className="text-2xl font-black italic tracking-tight text-white">PREFLIGHT</div>
-      </div>
+        <div className="brand-word text-2xl font-black italic tracking-tight text-white">PREFLIGHT</div>
+      </button>
       <nav className="mt-8 space-y-2 px-4">
         {items.map(([Icon, label], index) => (
-          <a key={label} className={`ops-nav-item ${index === 0 ? 'active' : ''}`} href={`#${label.toLowerCase().replace(/\s+/g, '-')}`}>
+          <a key={label} className={`ops-nav-item ${index === 0 ? 'active' : ''}`} href={`#${label.toLowerCase().replace(/\s+/g, '-')}`} title={collapsed ? label : undefined}>
             <Icon size={16} />
             <span>{label}</span>
           </a>
@@ -113,133 +352,119 @@ function Sidebar() {
       </nav>
       <div className="mt-auto border-t border-white/10 p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-500 text-sm font-bold text-white">MG</div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">Matt Guenther</div>
-            <div className="text-xs text-slate-400">Student Pilot</div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-500 text-sm font-bold text-white">PF</div>
+          <div className="sidebar-profile min-w-0">
+            <div className="truncate text-sm font-semibold text-white">Airport SITREP</div>
+            <div className="text-xs text-slate-400">Pilot briefing</div>
           </div>
-          <ChevronDown size={15} className="ml-auto text-slate-500" />
+          <ChevronDown size={15} className="sidebar-profile ml-auto text-slate-500" />
         </div>
       </div>
     </aside>
   );
 }
 
-function TopBar() {
-  const weather = useWeather();
-  async function downloadBackup() {
-    const data = await apiFetch('/.netlify/functions/export');
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `preflight-backup-${todayLocalISO()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
+function TopBar({ selectedIcao, onSelect }) {
   return (
     <header className="ops-topbar">
-      <div className="flex min-w-0 items-center gap-3">
-        <MapPin size={20} className="text-slate-300" />
-        <div className="truncate text-sm font-bold text-white">{AIRPORT.icao} / {AIRPORT.name} / {AIRPORT.city}</div>
-        <ChevronDown size={16} className="text-slate-500" />
-      </div>
-      <div className="hidden items-center gap-2 md:flex">
-        <span className="live-ops-indicator inline-flex items-center gap-1 rounded-md border border-emerald-400/35 bg-emerald-400/12 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-200">
-          <RadioTower size={13} /> Live Ops
-        </span>
-        <span className="rounded-md border border-sky-400/25 bg-sky-400/12 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-sky-200">Student VFR</span>
+      <div className="topbar-search">
+        <AirportSearch selectedIcao={selectedIcao} onSelect={onSelect} />
       </div>
       <div className="ml-auto flex items-center gap-4">
-        <a className="hidden items-center gap-2 text-sm font-semibold text-white hover:text-orange-400 lg:flex" href={ATC_AUDIO_URL} target="_blank" rel="noreferrer">
-          <Headphones size={17} className="text-slate-300" />
-          Bentonville Tower <span className="text-slate-400">119.975</span>
-        </a>
-        <div className="hidden items-center gap-2 text-sm font-semibold text-white sm:flex">
-          <Sun size={17} className="text-slate-300" />
-          {weather.data?.metar?.temp_c != null ? `${Math.round((weather.data.metar.temp_c * 9) / 5 + 32)}F` : '--'}
-        </div>
-        <Bell size={18} className="hidden text-slate-300 sm:block" />
-        <button className="ops-outline-button" onClick={downloadBackup}>
-          <Download size={15} /> Download Backup
+        <button className="ops-icon-button" title="Notifications placeholder" type="button" aria-label="Notifications">
+          <Bell size={18} className="text-slate-300" />
         </button>
       </div>
     </header>
   );
 }
 
-function Hero() {
-  const weather = useWeather();
-  const tfr = useTfr();
-  const minimums = useBlob('config', 'personal_minimums');
-  const result = evaluateGoNoGo(weather.data?.metar, minimums.data, tfr.data?.tfrs_nearby || [], weather.data?.taf);
-  const headline = result.status === 'go' ? "You're cleared for takeoff." : result.status === 'caution' ? 'Review before takeoff.' : 'Hold short for now.';
-  const subtext = result.status === 'go' ? 'Conditions look good for training at KVBT. Fly safe and have a great flight.' : 'Check weather, airspace, and personal minimums before committing.';
+function AirportSearch({ selectedIcao, onSelect }) {
+  const [value, setValue] = useState(selectedIcao);
+  useEffect(() => setValue(selectedIcao), [selectedIcao]);
 
   return (
-    <section className="ops-hero" style={{ backgroundImage: `linear-gradient(90deg, rgba(3, 12, 24, 0.86), rgba(3, 12, 24, 0.38), rgba(3, 12, 24, 0.82)), url(${HERO_IMAGE})` }}>
-      <div className="relative z-10 max-w-2xl">
-        <p className="text-sm font-semibold text-white/85">Good afternoon, Matt.</p>
-        <h1 className="mt-2 max-w-xl text-4xl font-black leading-none tracking-tight text-white md:text-5xl">{headline}</h1>
-        <p className="mt-4 max-w-xl text-base text-white/90">{subtext}</p>
+    <form
+      className="airport-search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSelect(normalizeAirportCode(value));
+      }}
+    >
+      <Search size={18} />
+      <input aria-label="Enter airport code" maxLength={4} onChange={(event) => setValue(event.target.value.toUpperCase())} placeholder="Enter airport code" value={value} />
+      <button type="submit">Load</button>
+    </form>
+  );
+}
+
+function SitrepHero({ airport, selectedIcao, sitrep, imageUrl }) {
+  const safeImageUrl = String(imageUrl || '').replace(/"/g, '\\"');
+  const backgroundImage = imageUrl
+    ? `linear-gradient(90deg, rgba(3, 12, 24, 0.88), rgba(3, 12, 24, 0.44), rgba(3, 12, 24, 0.82)), url("${safeImageUrl}")`
+    : 'linear-gradient(115deg, rgba(5, 32, 54, 0.98), rgba(3, 12, 24, 0.88)), radial-gradient(circle at 70% 20%, rgba(91, 151, 194, 0.22), transparent 28rem)';
+  return (
+    <section className="ops-hero sitrep-hero" style={{ backgroundImage }}>
+      <div className="relative z-10 max-w-3xl">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-white/75">Airport SITREP</p>
+        <h1 className="mt-2 max-w-3xl text-4xl font-black leading-none tracking-tight text-white md:text-5xl">{airportName(airport)} · {airport?.icao || selectedIcao}</h1>
+        <p className="mt-4 max-w-xl text-base text-white/90">{airportPlace(airport)}</p>
       </div>
-      <div className="ops-airport-card">
-        <div className="flex items-start gap-3">
-          <RadioTower size={26} className="text-sky-200" />
-          <div>
-            <div className="font-bold text-white">KVBT - Thaden Field</div>
-            <div className="text-sm text-slate-300">Bentonville, AR</div>
-          </div>
+      <div className="ops-airport-card sitrep-status-card">
+        <div className={`text-3xl font-black tracking-wide ${sitrep.tone}`}>{sitrep.label}</div>
+        <p className="mt-2 text-sm text-slate-200">{sitrep.summary}</p>
+        <div className="mt-4 space-y-2 text-xs text-slate-300">
+          {sitrep.bullets.slice(0, 3).map((item) => (
+            <div key={item} className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-orange-500" />{item}</div>
+          ))}
         </div>
-        <div className="mt-4 space-y-2 text-sm">
-          <div className="flex justify-between gap-6"><span>Elevation</span><strong>{AIRPORT.elevation_ft.toLocaleString()} ft MSL</strong></div>
-          <a className="flex justify-between gap-6 hover:text-orange-400" href={AIRPORT_DIAGRAM_URL} target="_blank" rel="noreferrer"><span>Runway</span><strong>18 / 36 - 6,006 ft</strong></a>
-          <a className="flex justify-between gap-6 hover:text-orange-400" href={ATC_AUDIO_URL} target="_blank" rel="noreferrer"><span>Tower</span><strong>119.975</strong></a>
-        </div>
+        <p className="mt-4 border-t border-white/10 pt-3 text-[11px] text-slate-400">Supports pilot review. Verify official sources before flight.</p>
       </div>
     </section>
   );
 }
 
-function FlightReadinessCard() {
-  const weather = useWeather();
-  const tfr = useTfr();
-  const minimums = useBlob('config', 'personal_minimums');
-  const result = evaluateGoNoGo(weather.data?.metar, minimums.data, tfr.data?.tfrs_nearby || [], weather.data?.taf);
-  const status = result.status === 'go' ? 'GO' : result.status === 'caution' ? 'CAUTION' : 'NO-GO';
+function LiveDataStrip({ weatherQuery, trafficQuery, radarQuery, notamsQuery, airportQuery }) {
+  const feeds = [
+    ['Weather', feedStatus(weatherQuery, weatherQuery.data?.fetched_utc || weatherQuery.data?.metar?.observed_utc, 15 * 60 * 1000)],
+    ['Traffic', feedStatus(trafficQuery, trafficQuery.data?.fetched_utc, 60 * 1000)],
+    ['Radar', feedStatus(radarQuery, radarQuery.data?.radar?.time_utc || radarQuery.data?.fetched_utc, 15 * 60 * 1000)],
+    ['NOTAMs', feedStatus(notamsQuery, notamsQuery.data?.fetched_utc, 30 * 60 * 1000)],
+    ['Airport', feedStatus(airportQuery, airportQuery.data?.fetched_utc, 24 * 60 * 60 * 1000)],
+  ];
+  const worstTone = feeds.some(([, item]) => item.tone === 'error') ? 'error' : feeds.some(([, item]) => item.tone === 'warning') ? 'warning' : 'live';
+  const summary = worstTone === 'error' ? 'Source attention needed' : worstTone === 'warning' ? 'Some feeds aging' : 'Feeds current';
   return (
-    <Card title="Today's Flight Readiness" icon={Plane} className="area-readiness">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <div className={`text-2xl font-black tracking-wide ${result.status === 'go' ? 'text-emerald-400' : result.status === 'caution' ? 'text-amber-300' : 'text-red-300'}`}>
-          {status}
+    <section className={`live-data-strip ${worstTone}`}>
+      <div className="live-data-summary">
+        <span className="live-data-dot" />
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-200">Live Data</div>
+          <div className="text-xs text-slate-300">{summary}</div>
         </div>
-        <span className="text-xs font-semibold text-slate-300">VFR - Student Pilot - Day</span>
       </div>
-      <div className="mt-4 space-y-2">
-        {result.conditions.slice(0, 6).map((item) => (
-          <div key={item.name} className="flex items-center gap-2 border-b border-white/8 pb-2 text-sm">
-            <span className={`h-2 w-2 rounded-full ${item.status === 'pass' ? 'bg-emerald-400' : item.status === 'caution' ? 'bg-amber-300' : 'bg-red-300'}`} />
-            <span className="font-semibold capitalize text-slate-100">{item.name}</span>
-            <span className="ml-auto text-slate-300">{item.value}</span>
+      <div className="live-data-feeds">
+        {feeds.map(([label, status]) => (
+          <div key={label} className={`live-data-feed ${status.tone}`}>
+            <span>{label}</span>
+            <strong>{status.label}</strong>
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs text-slate-400">Personal minimums evaluated for training.</p>
-    </Card>
+    </section>
   );
 }
 
-function WeatherRadar() {
+function WeatherRadar({ airport }) {
   const radar = useRadar();
-  const centerWorld = lonLatToWorld(AIRPORT.lat, AIRPORT.lon, RADAR_ZOOM);
+  const lat = Number(airport?.lat || 36.3444);
+  const lon = Number(airport?.lon || -94.2211);
+  const centerWorld = lonLatToWorld(lat, lon, RADAR_ZOOM);
   const centerTileX = Math.floor(centerWorld.x / TILE_SIZE);
   const centerTileY = Math.floor(centerWorld.y / TILE_SIZE);
   const tiles = [];
   for (let x = centerTileX - 2; x <= centerTileX + 2; x += 1) {
-    for (let y = centerTileY - 2; y <= centerTileY + 2; y += 1) {
-      tiles.push({ x, y });
-    }
+    for (let y = centerTileY - 2; y <= centerTileY + 2; y += 1) tiles.push({ x, y });
   }
   const radarPath = radar.data?.radar?.path;
   const radarHost = radar.data?.host;
@@ -249,64 +474,18 @@ function WeatherRadar() {
       {tiles.map((tile) => {
         const left = tile.x * TILE_SIZE - centerWorld.x;
         const top = tile.y * TILE_SIZE - centerWorld.y;
-        const radarUrl = radarHost && radarPath
-          ? `${radarHost}${radarPath}/256/${RADAR_ZOOM}/${tile.x}/${tile.y}/2/1_1.png`
-          : null;
+        const radarUrl = radarHost && radarPath ? `${radarHost}${radarPath}/256/${RADAR_ZOOM}/${tile.x}/${tile.y}/2/1_1.png` : null;
         return (
           <div key={`${tile.x}-${tile.y}`} className="absolute h-64 w-64 max-w-none" style={{ left: `calc(50% + ${left}px)`, top: `calc(50% + ${top}px)` }}>
-            <img
-              alt=""
-              className="weather-radar-base absolute inset-0 h-64 w-64 max-w-none select-none"
-              draggable="false"
-              src={`https://tile.openstreetmap.org/${RADAR_ZOOM}/${tile.x}/${tile.y}.png`}
-            />
-            {radarUrl ? (
-              <img
-                alt=""
-                className="weather-radar-layer absolute inset-0 h-64 w-64 max-w-none select-none"
-                draggable="false"
-                src={radarUrl}
-              />
-            ) : null}
+            <img alt="" className="weather-radar-base absolute inset-0 h-64 w-64 max-w-none select-none" draggable="false" src={`https://tile.openstreetmap.org/${RADAR_ZOOM}/${tile.x}/${tile.y}.png`} />
+            {radarUrl ? <img alt="" className="weather-radar-layer absolute inset-0 h-64 w-64 max-w-none select-none" draggable="false" src={radarUrl} /> : null}
           </div>
         );
       })}
-      <div className="weather-radar-center">
-        <span className="weather-radar-center-dot" title="KVBT - Thaden Field" />
-      </div>
-      <div className="weather-radar-caption">
-        <span>Precip radar</span>
-        <strong>{radar.data?.radar?.time_utc ? formatLocal(radar.data.radar.time_utc, 'h:mm a') : radar.isLoading ? 'Loading' : 'Unavailable'}</strong>
-      </div>
+      <div className="weather-radar-center"><span className="weather-radar-center-dot" title={airport?.icao || 'Airport'} /></div>
+      <div className="weather-radar-caption"><span>Precip radar</span><strong>{radar.data?.radar?.time_utc ? formatLocal(radar.data.radar.time_utc, 'h:mm a') : radar.isLoading ? 'Loading' : 'Unavailable'}</strong></div>
       <a className="weather-radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noreferrer">RainViewer</a>
     </div>
-  );
-}
-
-function WeatherCard() {
-  const weather = useWeather();
-  const metar = weather.data?.metar || {};
-  const da = densityAltitude(AIRPORT.elevation_ft, metar.temp_c, metar.altimeter_inhg);
-  return (
-    <Card title="Weather" icon={Cloud} className="area-weather">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Cloud size={32} className="text-white" />
-          <div className="text-3xl font-black text-white">{metar.temp_c != null ? `${Math.round(metar.temp_c)}C` : '--'}</div>
-          <div className="text-sm text-slate-300">{metar.sky_condition || 'Current'}</div>
-        </div>
-        <div className="text-xs text-slate-400">Observed {formatLocal(metar.observed_utc, 'h:mm a')}</div>
-      </div>
-      <div className="mt-5 grid grid-cols-3 gap-4 border-t border-white/10 pt-4 text-sm">
-        <Metric label="Wind" value={`${metar.wind_dir_deg ?? 'VRB'} / ${metar.wind_speed_kt ?? '--'} kt`} />
-        <Metric label="Visibility" value={`${metar.visibility_sm ?? '--'} sm`} />
-        <Metric label="Dew Point" value={`${metar.dewpoint_c ?? '--'}C`} />
-        <Metric label="Altimeter" value={`${metar.altimeter_inhg ?? '--'} inHg`} />
-        <Metric label="Density Alt." value={da == null ? '--' : `${da.toLocaleString()} ft`} />
-        <Metric label="Category" value={metar.flight_category || '--'} />
-      </div>
-      <WeatherRadar />
-    </Card>
   );
 }
 
@@ -319,329 +498,284 @@ function Metric({ label, value }) {
   );
 }
 
-function NextLessonCard() {
-  const [open, setOpen] = useState(false);
-  const lesson = useLesson();
-  const next = lesson.data?.next_lesson;
+function WeatherCard({ airport, weather }) {
+  const metar = weather?.metar || {};
+  const da = densityAltitude(airport?.elevation_ft, metar.temp_c, metar.altimeter_inhg);
   return (
-    <Card title="Next Lesson" icon={CalendarDays} className="area-lesson">
-      {next ? (
-        <div>
-          <div className="text-lg font-bold text-white">{formatLocal(next.start_utc, 'EEE, MMM d')}</div>
-          <div className="mt-1 text-sm text-slate-300">{formatLocal(next.start_utc, 'h:mm a')} - {formatLocal(next.end_utc, 'h:mm a')}</div>
-          <p className="mt-3 text-sm text-slate-300">{next.notes || 'Lesson block scheduled.'}</p>
+    <Card title="Weather" icon={Cloud} className="area-weather" action={<a className="text-xs font-bold text-orange-400 hover:text-orange-300" href={aviationWeatherUrl(airport)} target="_blank" rel="noreferrer">Briefing</a>}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Cloud size={32} className="text-white" />
+          <div className="text-3xl font-black text-white">{metar.temp_c != null ? `${Math.round(metar.temp_c)}C` : '--'}</div>
+          <div className="text-sm text-slate-300">{metar.sky_condition || 'Current'}</div>
         </div>
-      ) : (
-        <div className="text-sm text-slate-300">
-          <p>No lesson scheduled.</p>
-          <p>Add the next block manually.</p>
-        </div>
-      )}
-      <button className="ops-primary-button mt-auto w-full" onClick={() => setOpen(true)}>Schedule Lesson</button>
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Schedule lesson">
-        <NextLessonForm onSave={async (value) => { await lesson.save(value); await lesson.refetch(); setOpen(false); }} onCancel={() => setOpen(false)} />
-      </Modal>
+        <div className="text-right text-xs text-slate-400">Observed<br />{formatLocal(metar.observed_utc, 'h:mm a')}</div>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/10 pt-4 text-sm md:grid-cols-3">
+        <Metric label="Category" value={metar.flight_category || '--'} />
+        <Metric label="Wind" value={`${metar.wind_dir_deg ?? 'VRB'} / ${metar.wind_speed_kt ?? '--'} kt`} />
+        <Metric label="Visibility" value={`${metar.visibility_sm ?? '--'} sm`} />
+        <Metric label="Ceiling" value={metar.ceiling_ft ? `${metar.ceiling_ft.toLocaleString()} ft` : 'Unlimited'} />
+        <Metric label="Dew Point" value={`${metar.dewpoint_c ?? '--'}C`} />
+        <Metric label="Altimeter" value={`${metar.altimeter_inhg ?? '--'} inHg`} />
+        <Metric label="Density Alt." value={da == null ? '--' : `${da.toLocaleString()} ft`} />
+      </div>
+      <div className="mt-4 rounded-md bg-slate-950/60 p-3 font-mono text-xs leading-relaxed text-slate-300">{metar.raw || 'METAR unavailable.'}</div>
+      <WeatherRadar airport={airport} />
     </Card>
   );
 }
 
-function CheckrideCard() {
-  const entries = useBlob('logbook', 'entries');
-  const maneuvers = useBlob('training', 'maneuvers');
-  const ground = useBlob('training', 'ground_school');
-  const written = useBlob('training', 'written_exam');
-  const readiness = computeReadiness({ entries: entries.data || [], maneuvers: maneuvers.data || {}, groundSchool: ground.data || {}, writtenExam: written.data || {} });
+function RunwayWindCard({ airport, weather }) {
+  const metar = weather?.metar || {};
+  const best = bestRunwayFor(airport, metar);
+  const tailwind = best?.headwind < 0 ? Math.abs(best.headwind) : 0;
+  const headwind = best?.headwind > 0 ? best.headwind : 0;
+  const windDisplay = metar.wind_dir_deg == null ? 'VRB' : `${metar.wind_dir_deg} deg`;
+  const gustDisplay = metar.wind_gust_kt ? `G${metar.wind_gust_kt}` : 'No gust';
   return (
-    <Card title="Checkride Readiness" icon={Trophy} className="area-checkride">
-      <div className="flex items-end justify-between">
-        <div className="text-5xl font-black text-white">{readiness.score}%</div>
-        <div className="text-xs text-slate-300">{readiness.remaining.length} items left</div>
+    <Card title="Runway / Wind" icon={Wind} className="area-runway" action={<a className="text-xs font-bold text-orange-400 hover:text-orange-300" href={skyVectorUrl(airport)} target="_blank" rel="noreferrer">Chart</a>}>
+      <div className="runway-visual">
+        <div className="wind-arrow" style={{ transform: `rotate(${(metar.wind_dir_deg || 0) + 180}deg)` }} />
+        <div className="runway-bar">
+          <span className="runway-end top">{best?.id || '--'}</span>
+          <span className="runway-centerline" />
+          <span className="runway-end bottom">{best?.runway?.id?.split('/')?.find((id) => id !== best?.id) || '--'}</span>
+        </div>
       </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-sky-300" style={{ width: `${readiness.score}%` }} /></div>
-      <div className="mt-4 space-y-2 text-sm">
-        {readiness.remaining.slice(0, 6).map((item) => (
-          <div key={item.label} className="flex justify-between gap-3">
-            <span className="text-slate-300">{item.label}</span>
-            <strong className="text-white">{Number(item.current).toFixed(item.current % 1 ? 1 : 0)} / {item.required}</strong>
-          </div>
-        ))}
+      <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
+        <Metric label="Best aligned" value={best ? `RWY ${best.id}` : '--'} />
+        <Metric label="Wind" value={`${windDisplay} / ${metar.wind_speed_kt ?? '--'} kt`} />
+        <Metric label="Headwind" value={`${headwind} kt`} />
+        <Metric label="Tailwind" value={`${tailwind} kt`} />
+        <Metric label="Crosswind" value={`${best?.crosswind ?? '--'} kt`} />
+        <Metric label="Gust" value={gustDisplay} />
       </div>
-      <a className="mt-auto inline-flex text-xs font-bold text-orange-500 hover:text-orange-400" href={PPL_ACS_URL} target="_blank" rel="noreferrer">
-        View requirements
-      </a>
+      <div className="mt-4 rounded-md border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
+        <div className="flex items-center justify-between gap-3"><span>Runway length</span><strong className="text-white">{best?.runway?.length_ft ? `${best.runway.length_ft.toLocaleString()} ft` : '--'}</strong></div>
+        <div className="mt-2 flex items-center justify-between gap-3"><span>Surface</span><strong className="text-white">{best?.runway?.surface || 'Verify chart'}</strong></div>
+      </div>
     </Card>
   );
 }
 
-function TrainingProgressCard() {
-  const entries = useBlob('logbook', 'entries');
-  const hours = aggregateHours(entries.data || []);
-  const rows = [
-    ['Dual', hours.dual, 20],
-    ['Solo', hours.solo, 10],
-    ['Solo XC', hours.soloXc, 5],
-    ['Night', hours.night, 3],
-    ['Instrument', hours.instrument, 3],
-  ];
-  return (
-    <Card title="Training Progress" icon={Gauge} className="area-progress">
-      <div className="grid grid-cols-[130px_1fr] gap-5">
-        <div className="progress-ring">
-          <div className="text-2xl font-black text-white">{hours.total.toFixed(1)}</div>
-          <div className="text-xs text-slate-300">of 40 hrs</div>
-        </div>
-        <div className="space-y-2 text-sm">
-          {rows.map(([label, value, total]) => (
-            <div key={label} className="flex justify-between border-b border-white/8 pb-1">
-              <span className="text-slate-300">{label}</span>
-              <strong className="text-white">{value.toFixed(1)} / {total}</strong>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="mt-4 text-xs font-bold text-orange-500">View full progress</div>
-    </Card>
-  );
-}
-
-function AircraftCard() {
-  const selected = useBlob('config', 'selected_aircraft_tail');
-  const aircraft = FLEET.find((item) => item.tail === selected.data) || PRIMARY_AIRCRAFT;
-  return (
-    <Card title="Aircraft" icon={Plane} className="area-aircraft">
-      <div className="grid gap-4 md:grid-cols-[1fr_220px]">
-        <div>
-          <select className="mb-3 w-full rounded-md border border-white/10 bg-slate-950/55 px-3 py-2 text-sm font-semibold text-white" value={aircraft.tail} onChange={(event) => selected.save(event.target.value)}>
-            {FLEET.map((item) => <option key={item.tail} value={item.tail}>{item.type} - {item.tail}</option>)}
-          </select>
-          <div className="text-2xl font-black text-white">{aircraft.type}</div>
-          <div className="text-sm font-semibold text-slate-300">{aircraft.tail}</div>
-          <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-            <Metric label="Availability" value="Available" />
-            <Metric label="Fuel" value={aircraft.fuel_type || 'SIM'} />
-            <Metric label="Rate" value={`$${aircraft.hourly_rate}/hr`} />
-          </div>
-        </div>
-        <div className="aircraft-visual">
-          {aircraft.image_url ? (
-            <img className="h-full w-full object-cover" src={aircraft.image_url} alt={`${aircraft.tail} ${aircraft.type}`} />
-          ) : (
-            <Plane size={84} />
-          )}
-          <div className="aircraft-visual-label">{aircraft.tail}</div>
-        </div>
-      </div>
-      <div className="mt-4 border-t border-white/10 pt-3 text-sm text-slate-300">{aircraft.equipment}</div>
-      {aircraft.tail !== 'Simulator' ? (
-        <a className="mt-auto inline-flex text-xs font-bold text-orange-500 hover:text-orange-400" href={flightAwareAircraftUrl(aircraft.tail)} target="_blank" rel="noreferrer">
-          View aircraft details
-        </a>
-      ) : (
-        <div className="mt-auto text-xs font-bold text-slate-500">Simulator profile unavailable</div>
-      )}
-    </Card>
-  );
-}
-
-function GroundSchoolCard() {
-  const [open, setOpen] = useState(false);
-  const ground = useBlob('training', 'ground_school');
-  const tests = useBlob('training', 'practice_tests');
-  const topics = Object.entries(ground.data || {});
-  const complete = topics.filter(([, state]) => state.status === 'complete').length;
-  const pct = topics.length ? Math.round((complete / topics.length) * 100) : 0;
-  return (
-    <Card title="Ground School" icon={BookOpen} className="area-ground">
-      <div className="grid grid-cols-[96px_1fr] gap-4">
-        <div className="progress-ring small">
-          <div className="text-xl font-black text-white">{pct}%</div>
-          <div className="text-xs text-slate-300">Complete</div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {topics.slice(0, 6).map(([topic, state]) => (
-            <div key={topic} className="rounded-md bg-white/6 px-3 py-2 text-xs">
-              <div className="truncate font-semibold text-white">{labelize(topic)}</div>
-              <div className="text-slate-400">{state.status.replace('_', ' ')}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <button className="mt-4 text-xs font-bold text-orange-500" onClick={() => setOpen(true)}>Add practice test</button>
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Add practice test">
-        <PracticeTestForm onSave={async (test) => { await tests.save([...(tests.data || []), test]); setOpen(false); }} onCancel={() => setOpen(false)} />
-      </Modal>
-    </Card>
-  );
-}
-
-function ExpensesCard() {
-  const [open, setOpen] = useState(false);
-  const expenses = useBlob('expenses', 'entries');
-  const logbook = useBlob('logbook', 'entries');
-  const list = expenses.data || [];
-  const hours = aggregateHours(logbook.data || []);
-  const projection = projectedTotalCost(list, hours.total);
-  const total = list.reduce((sum, item) => sum + Number(item.total || 0), 0);
-  const bars = list.slice(0, 5);
-  return (
-    <Card title="Expenses" icon={Wallet} className="area-expenses">
-      <div className="flex justify-between">
-        <Metric label="This Month" value={`$${Math.round(total).toLocaleString()}`} />
-        <Metric label="Projected" value={`$${projection.projected.toLocaleString()}`} />
-      </div>
-      <div className="mt-5 flex h-20 items-end gap-5 border-b border-white/10">
-        {bars.length ? bars.map((item) => <div key={item.id} className="w-8 bg-slate-500/70" style={{ height: `${Math.max(12, Math.min(72, Number(item.total || 0) / 5))}px` }} />) : <div className="text-sm text-slate-400">No expenses yet.</div>}
-      </div>
-      <button className="mt-4 text-xs font-bold text-orange-500" onClick={() => setOpen(true)}>Add expense</button>
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Add expense">
-        <ExpenseEntryForm logbookEntries={logbook.data || []} onSave={async (expense) => { await expenses.save([expense, ...list]); setOpen(false); }} onCancel={() => setOpen(false)} />
-      </Modal>
-    </Card>
-  );
-}
-
-function fuelStatusTone(deltaPct) {
-  if (deltaPct <= -5) return 'text-emerald-300';
-  if (deltaPct >= 5) return 'text-red-300';
-  return 'text-slate-300';
-}
-
-function FuelIndex({ label, average, deltaPct, status, positionPct }) {
+function FuelIndex({ average, deltaPct, status, positionPct }) {
   return (
     <div className="fuel-index-row">
       <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-        <span className="text-slate-400">{label} avg {money(average)}</span>
-        <strong className={fuelStatusTone(deltaPct)}>{signedPct(deltaPct)} {status}</strong>
+        <span className="text-slate-400">Regional avg {money(average)}</span>
+        <strong className={deltaPct <= -5 ? 'text-emerald-300' : deltaPct >= 5 ? 'text-red-300' : 'text-slate-300'}>{signedPct(deltaPct)} {status}</strong>
       </div>
-      <div className="flex items-start justify-between gap-3">
-        <div className="fuel-index flex-1">
-          <span className="fuel-index-mid" />
-          <span className="fuel-index-dot" style={{ left: `${positionPct ?? 50}%` }} />
-        </div>
-      </div>
+      <div className="fuel-index flex-1"><span className="fuel-index-mid" /><span className="fuel-index-dot" style={{ left: `${positionPct ?? 50}%` }} /></div>
     </div>
   );
 }
 
-function FuelPriceRow({ fuel }) {
-  return (
-    <div className="fuel-price-row">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="font-black text-white">{fuel.label}</div>
-          <div className="text-xs text-slate-400">{fuel.service}</div>
-        </div>
-        <div className="text-right">
-          <div className="text-2xl font-black text-white">{money(fuel.price_per_gal)}</div>
-          <div className="text-xs text-slate-400">per gal</div>
-        </div>
-      </div>
-      <div className="mt-4 space-y-3">
-        <FuelIndex
-          label="Southern"
-          average={fuel.regional_avg}
-          deltaPct={fuel.market_delta_pct}
-          status={fuel.market_status}
-          positionPct={fuel.index_position_pct}
-        />
-      </div>
-    </div>
-  );
-}
-
-function FuelCostCard() {
-  const fuel = useFuel();
+function FuelCard({ icao }) {
+  const fuel = useFuel(icao);
   const fuels = fuel.data?.local?.fuels || [];
-  const updated = fuel.data?.local?.updated;
   return (
     <Card title="Fuel Prices" icon={Fuel} className="area-fuel">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-        {fuels.length ? fuels.map((item) => <FuelPriceRow key={item.code} fuel={item} />) : (
-          <div className="rounded-md border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-            {fuel.isLoading ? 'Loading fuel prices...' : 'Fuel prices unavailable.'}
+        {fuels.length ? fuels.map((item) => (
+          <div key={item.code} className="fuel-price-row">
+            <div className="flex items-start justify-between gap-3">
+              <div><div className="font-black text-white">{item.label}</div><div className="text-xs text-slate-400">{item.service}</div></div>
+              <div className="text-right"><div className="text-2xl font-black text-white">{money(item.price_per_gal)}</div><div className="text-xs text-slate-400">per gal</div></div>
+            </div>
+            <div className="mt-4"><FuelIndex average={item.regional_avg} deltaPct={item.market_delta_pct} status={item.market_status} positionPct={item.index_position_pct} /></div>
           </div>
-        )}
+        )) : <div className="rounded-md border border-white/10 bg-white/5 p-4 text-sm text-slate-300">{fuel.isLoading ? 'Loading fuel prices...' : 'Fuel prices unavailable.'}</div>}
       </div>
       <div className="mt-4 rounded-md border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>Updated {updated || '--'}</span>
-          <a className="font-bold text-orange-400 hover:text-orange-300" href="https://www.airnav.com/airport/KVBT/LEGENDS_AIR_CENTER" target="_blank" rel="noreferrer">AirNav source</a>
-        </div>
-        <div className="mt-2 text-slate-400">{fuel.data?.market?.trend?.summary || 'Market trend unavailable.'}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>Updated {fuel.data?.local?.updated || '--'}</span><a className="font-bold text-orange-400 hover:text-orange-300" href={fuel.data?.sources?.[0]?.url || '#'} target="_blank" rel="noreferrer">Source</a></div>
       </div>
     </Card>
   );
 }
 
-function LogbookSummaryCard() {
-  const [open, setOpen] = useState(false);
-  const entries = useBlob('logbook', 'entries');
-  const list = entries.data || [];
-  const hours = aggregateHours(list);
+function NotamCard({ notams, airport, warning }) {
+  const groups = ['Critical', 'Operational', 'Navigation', 'Informational'].map((label) => ({
+    label,
+    items: (notams || []).filter((notam) => classifyNotam(notam) === label),
+  }));
   return (
-    <Card title="Logbook Summary" icon={BookOpen} className="area-logbook">
-      <div className="grid gap-4 md:grid-cols-[170px_1fr]">
-        <div className="space-y-2 text-sm">
-          <Metric label="Total Time" value={`${hours.total.toFixed(1)} hrs`} />
-          <Metric label="PIC Time" value={`${hours.solo.toFixed(1)} hrs`} />
-          <Metric label="XC Time" value={`${hours.soloXc.toFixed(1)} hrs`} />
-        </div>
-        <div>
-          <div className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Recent Entries</div>
-          <div className="space-y-2 text-xs">
-            {list.slice(0, 4).map((entry) => (
-              <div key={entry.id} className="grid grid-cols-3 gap-3 text-slate-300">
-                <span>{entry.date}</span><span>{entry.hobbs_total}</span><span>{entry.type}</span>
-              </div>
-            ))}
-            {!list.length ? <div className="text-slate-400">No logbook entries yet.</div> : null}
+    <Card title="NOTAM Triage" icon={AlertTriangle} className="area-notams" action={<a className="text-xs font-bold text-orange-400 hover:text-orange-300" href={faaNotamSearchUrl(airport)} target="_blank" rel="noreferrer">FAA Search</a>}>
+      {warning ? <div className="mb-4 rounded-md border border-amber-300/20 bg-amber-500/10 p-3 text-xs text-amber-100">{warning}</div> : null}
+      <div className="space-y-4">
+        {groups.map((group) => (
+          <div key={group.label}>
+            <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.14em] text-slate-400"><span>{group.label}</span><span>{group.items.length}</span></div>
+            <div className="space-y-2">
+              {group.items.slice(0, 3).map((notam) => (
+                <details key={notam.id} className="notam-item">
+                  <summary><span className={`notam-badge ${group.label.toLowerCase()}`}>{group.label}</span>{summarizeNotam(notam)}</summary>
+                  <div className="mt-2 rounded bg-slate-950/60 p-3 font-mono text-[11px] text-slate-300">{notam.raw || notam.summary}</div>
+                </details>
+              ))}
+              {!group.items.length ? <div className="text-xs text-slate-500">No loaded {group.label.toLowerCase()} NOTAMs.</div> : null}
+            </div>
           </div>
-        </div>
+        ))}
       </div>
-      <button className="mt-4 text-xs font-bold text-orange-500" onClick={() => setOpen(true)}>Add logbook entry</button>
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Add logbook entry">
-        <LogbookEntryForm onSave={async (entry) => { await entries.save([entry, ...list]); setOpen(false); }} onCancel={() => setOpen(false)} />
-      </Modal>
     </Card>
   );
 }
 
-function BottomStrip() {
-  const weather = useWeather();
-  const metar = weather.data?.metar || {};
+function AirportOverviewCard({ airport }) {
+  const frequencies = airportFrequencies(airport);
+  return (
+    <Card
+      title="Airport Overview"
+      icon={MapPin}
+      className="area-overview"
+      action={<a className="inline-flex items-center gap-1 text-xs font-bold text-orange-400 hover:text-orange-300" href={liveAtcUrl(airport)} target="_blank" rel="noreferrer"><Headphones size={13} /> LiveATC</a>}
+    >
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <Metric label="Identifier" value={airport?.icao || '--'} />
+        <Metric label="Elevation" value={airport?.elevation_ft ? `${airport.elevation_ft.toLocaleString()} ft MSL` : '--'} />
+        <Metric label="Runways" value={airport?.runways?.map((rwy) => rwy.id).join(', ') || '--'} />
+        <Metric label="Tower" value={airport?.towered ? 'Towered' : 'Non-towered / verify'} />
+        <Metric label="Services" value={airport?.services || '--'} />
+        <Metric label="Beacon" value={airport?.beacon || '--'} />
+      </div>
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <div className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Frequencies</div>
+        <div className="flex flex-wrap gap-2">{frequencies.length ? frequencies.map((freq) => (
+          <span key={`${freq.label}-${freq.value}`} className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300">
+            <strong className="mr-1 text-slate-100">{freq.label}</strong>{freq.value}
+          </span>
+        )) : <span className="text-xs text-slate-500">No frequencies loaded.</span>}</div>
+        {airport?.frequency_source ? <div className="mt-2 text-[11px] text-slate-500">Source fallback: {airport.frequency_source}</div> : null}
+      </div>
+    </Card>
+  );
+}
+
+function AlternatesCard({ alternates, onSelect }) {
+  return (
+    <Card title="Nearby Alternates" icon={Compass} className="area-alternates">
+      <div className="space-y-2">
+        {(alternates || []).slice(0, 6).map((alternate) => (
+          <button key={alternate.icao} className="alternate-row w-full text-left" onClick={() => onSelect(alternate.icao)} type="button">
+            <div><div className="font-bold text-white">{alternate.icao}</div><div className="text-xs text-slate-400">{alternate.name}</div></div>
+            <div className="text-right text-xs text-slate-300"><strong className="text-white">{alternate.distance_nm} NM</strong><br />{cardinal(alternate.bearing_deg)} - {alternate.flight_category || '--'}</div>
+          </button>
+        ))}
+        {!alternates?.length ? <div className="text-sm text-slate-400">No nearby METAR alternates loaded.</div> : null}
+      </div>
+    </Card>
+  );
+}
+
+function ChangesCard({ changes, previousSnapshot, currentSnapshot }) {
+  const reference = previousSnapshot?.at
+    ? `Since ${formatLocal(previousSnapshot.at, 'MMM d, h:mm a zzz')}`
+    : currentSnapshot?.at
+      ? `Snapshot started ${formatLocal(currentSnapshot.at, 'h:mm a zzz')}`
+      : 'Waiting for current snapshot';
+  return (
+    <Card title="What Changed?" icon={Gauge} className="area-changes" action={<span className="text-xs font-semibold text-slate-400">{reference}</span>}>
+      <div className="space-y-3">
+        {changes.map((change) => (
+          <div key={change} className="flex gap-3 rounded-md bg-white/5 p-3 text-sm text-slate-300"><span className="mt-1 h-2 w-2 rounded-full bg-orange-500" />{change}</div>
+        ))}
+      </div>
+      {currentSnapshot?.at ? <div className="mt-4 text-xs text-slate-500">Current snapshot: {formatLocal(currentSnapshot.at, 'MMM d, h:mm:ss a zzz')}</div> : null}
+    </Card>
+  );
+}
+
+function SourceFreshnessCard({ airportQuery, weatherQuery, notamsQuery, trafficQuery, fuelQuery, radarQuery }) {
+  const rows = [
+    ['Weather/METAR', weatherQuery.data?.fetched_utc, 'NOAA/AviationWeather'],
+    ['NOTAMs', notamsQuery.data?.fetched_utc, 'FAA'],
+    ['Airport Data', airportQuery.data?.fetched_utc, 'AviationWeather/FAA'],
+    ['Traffic/ADS-B', trafficQuery.data?.fetched_utc, 'adsb.fi'],
+    ['Fuel Prices', fuelQuery.data?.fetched_utc, 'AirNav'],
+    ['Radar', radarQuery.data?.radar?.time_utc || radarQuery.data?.fetched_utc, 'RainViewer'],
+  ];
+  return (
+    <Card title="Data Freshness" icon={Database} className="area-sources">
+      <div className="space-y-2">
+        {rows.map(([label, updated, source]) => (
+          <div key={label} className="source-row"><span>{label}</span><strong>{timeAgo(updated)}</strong><small>{source}</small></div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function BottomStrip({ airport, weather }) {
+  const metar = weather?.metar || {};
+  const best = bestRunwayFor(airport, metar);
   return (
     <div className="ops-bottom-strip">
       <div className="flex items-center gap-3"><Gauge size={24} /> <span>{formatLocal(new Date().toISOString(), 'h:mm a zzz')}<small>{todayLocalISO()}</small></span></div>
-      <div className="flex items-center gap-3"><Wind size={24} /> <span>{metar.wind_dir_deg ?? 'VRB'} / {metar.wind_speed_kt ?? '--'} kt<small>{metar.wind_gust_kt ? `Gust ${metar.wind_gust_kt}` : 'Calm gusts'}</small></span></div>
-      <a className="flex items-center gap-3 hover:text-orange-400" href={AIRPORT_DIAGRAM_URL} target="_blank" rel="noreferrer"><RadioTower size={24} /> <span>RWY 18 / 36<small>6,006 ft x 100 ft</small></span></a>
-      <a className="flex items-center gap-3 hover:text-orange-400" href={ATC_AUDIO_URL} target="_blank" rel="noreferrer"><Headphones size={24} /> <span>Bentonville Tower<small>119.975</small></span></a>
+      <div className="flex items-center gap-3"><Wind size={24} /> <span>{metar.wind_dir_deg ?? 'VRB'} / {metar.wind_speed_kt ?? '--'} kt<small>{metar.wind_gust_kt ? `Gust ${metar.wind_gust_kt}` : 'Current wind'}</small></span></div>
+      <a className="flex items-center gap-3 hover:text-orange-400" href={skyVectorUrl(airport)} target="_blank" rel="noreferrer"><RadioTower size={24} /> <span>{best ? `RWY ${best.id}` : 'Runways'}<small>{airport?.runways?.[0]?.length_ft ? `${airport.runways[0].length_ft.toLocaleString()} ft` : 'Diagram'}</small></span></a>
+      <a className="flex items-center gap-3 hover:text-orange-400" href={liveAtcUrl(airport)} target="_blank" rel="noreferrer"><Headphones size={24} /> <span>LiveATC<small>{airport?.icao || '--'}</small></span></a>
     </div>
   );
 }
 
 export default function App() {
+  const [selectedIcao, setSelectedIcao] = useState(() => localStorage.getItem('preflight:selectedAirport') || normalizeAirportCode(import.meta.env.VITE_AIRPORT_ICAO || 'KVBT'));
+  const airportQuery = useAirport(selectedIcao);
+  const airport = airportQuery.data?.airport;
+  const airportImageQuery = useAirportImage(airport || { icao: selectedIcao });
+  const heroImageUrl = airportImageQuery.data?.image_url || (selectedIcao === 'KVBT' ? HERO_IMAGE : null);
+  const weatherQuery = useWeather(selectedIcao);
+  const notamsQuery = useNotams(selectedIcao);
+  const tfrQuery = useTfr(selectedIcao);
+  const fuelQuery = useFuel(selectedIcao);
+  const radarQuery = useRadar();
+  const center = airport ? { icao: airport.icao, lat: airport.lat, lon: airport.lon } : null;
+  const trafficQuery = useTraffic(25, center);
+  const minimums = useBlob('config', 'personal_minimums');
+
+  useEffect(() => {
+    localStorage.setItem('preflight:selectedAirport', selectedIcao);
+  }, [selectedIcao]);
+
+  const sitrep = useMemo(() => evaluateSitrep({
+    metar: weatherQuery.data?.metar,
+    minimums: minimums.data,
+    tfrs: tfrQuery.data?.tfrs_nearby || [],
+    notams: notamsQuery.data?.notams || [],
+    traffic: trafficQuery.data?.aircraft || [],
+  }), [weatherQuery.data, minimums.data, tfrQuery.data, notamsQuery.data, trafficQuery.data]);
+
+  const snapshot = useMemo(() => snapshotFrom({
+    metar: weatherQuery.data?.metar,
+    traffic: trafficQuery.data?.aircraft,
+    notams: notamsQuery.data?.notams,
+  }), [weatherQuery.data, trafficQuery.data, notamsQuery.data]);
+  const previousSnapshot = usePreviousSnapshot(selectedIcao, snapshot);
+  const changes = changesFrom(previousSnapshot, snapshot);
+
   return (
     <div className="legends-dashboard min-h-screen">
       <Sidebar />
       <div className="min-w-0 flex-1">
-        <TopBar />
+        <TopBar selectedIcao={selectedIcao} onSelect={setSelectedIcao} />
         <main className="px-5 py-5 xl:px-8">
-          <Hero />
-          <div className="ops-layout mt-5">
-            <FlightReadinessCard />
-            <WeatherCard />
-            <TrafficScope title="Local Traffic (ADS-B)" className="area-traffic" compact />
-            <FuelCostCard />
-            <NextLessonCard />
-            <AircraftCard />
-            <CheckrideCard />
-            <TrainingProgressCard />
-            <GroundSchoolCard />
-            <ExpensesCard />
-            <LogbookSummaryCard />
+          <SitrepHero airport={airport} selectedIcao={selectedIcao} sitrep={sitrep} imageUrl={heroImageUrl} />
+          <LiveDataStrip weatherQuery={weatherQuery} trafficQuery={trafficQuery} radarQuery={radarQuery} notamsQuery={notamsQuery} airportQuery={airportQuery} />
+          {airportQuery.isError ? <div className="mt-4 rounded-md border border-red-300/30 bg-red-950/30 p-4 text-sm text-red-100">{airportQuery.error.message}</div> : null}
+          <div className="ops-layout sitrep-layout mt-5">
+            <WeatherCard airport={airport} weather={weatherQuery.data} />
+            <RunwayWindCard airport={airport} weather={weatherQuery.data} />
+            <FuelCard icao={selectedIcao} />
+            <TrafficScope airport={airport} className="area-traffic" />
+            <NotamCard notams={notamsQuery.data?.notams || []} airport={airport} warning={notamsQuery.data?.warning} />
+            <AirportOverviewCard airport={airport} />
+            <AlternatesCard alternates={airportQuery.data?.alternates || []} onSelect={setSelectedIcao} />
+            <ChangesCard changes={changes} previousSnapshot={previousSnapshot} currentSnapshot={snapshot} />
+            <SourceFreshnessCard airportQuery={airportQuery} weatherQuery={weatherQuery} notamsQuery={notamsQuery} trafficQuery={trafficQuery} fuelQuery={fuelQuery} radarQuery={radarQuery} />
           </div>
         </main>
-        <BottomStrip />
+        <BottomStrip airport={airport} weather={weatherQuery.data} />
       </div>
     </div>
   );

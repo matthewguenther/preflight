@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 
-export function useNotams() {
-  const icao = import.meta.env.VITE_AIRPORT_ICAO || 'KVBT';
+export function useNotams(selectedIcao) {
+  const icao = selectedIcao || import.meta.env.VITE_AIRPORT_ICAO || 'KVBT';
   return useQuery({
     queryKey: ['notams', icao],
     queryFn: () => apiFetch(`/.netlify/functions/notams?icao=${icao}`),

@@ -1,7 +1,18 @@
 import { requireAuth, json } from './_auth.js';
 
-const KVBT = { lat: 36.3444, lon: -94.2211 };
+const API_BASE = 'https://aviationweather.gov/api/data';
 const TFR_URL = 'https://tfr.faa.gov/tfrapi/exportTfrList';
+
+async function airportPoint(icao) {
+  const res = await fetch(`${API_BASE}/stationinfo?ids=${icao}&format=json`);
+  if (!res.ok) return { lat: 36.3444, lon: -94.2211 };
+  const stations = await res.json();
+  const station = Array.isArray(stations) ? stations[0] : null;
+  return {
+    lat: Number(station?.lat ?? 36.3444),
+    lon: Number(station?.lon ?? -94.2211),
+  };
+}
 
 function distanceNm(a, b) {
   const rad = Math.PI / 180;
@@ -55,6 +66,9 @@ export default async (req) => {
   const auth = requireAuth(req.headers);
   if (!auth.ok) return json({ error: auth.message }, { status: auth.status });
 
+  const url = new URL(req.url);
+  const icao = (url.searchParams.get('icao') || 'KVBT').toUpperCase();
+  const center = await airportPoint(icao);
   const res = await fetch(TFR_URL);
   if (!res.ok) return json({ error: `TFR feed returned ${res.status}` }, { status: 502 });
   const records = await res.json();
@@ -64,7 +78,7 @@ export default async (req) => {
       const source = record.properties ? { ...record.properties, geometry: record.geometry } : record;
       const coords = coordinatesFrom(source);
       if (!coords) return null;
-      const distance = distanceNm(KVBT, coords);
+      const distance = distanceNm(center, coords);
       return distance <= 100 ? normalize(source, distance) : null;
     })
     .filter(Boolean)

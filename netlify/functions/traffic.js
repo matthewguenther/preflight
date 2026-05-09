@@ -1,6 +1,6 @@
 import { requireAuth, json } from './_auth.js';
 
-const CENTER = { lat: 36.3444, lon: -94.2211 };
+const DEFAULT_CENTER = { icao: 'KVBT', lat: 36.3444, lon: -94.2211 };
 const DEFAULT_RADIUS_NM = 35;
 const ADSB_FI_URL = 'https://opendata.adsb.fi/api/v3';
 
@@ -35,7 +35,15 @@ export default async (req) => {
 
   const url = new URL(req.url);
   const radius = Math.min(80, Math.max(5, Number(url.searchParams.get('radius_nm') || DEFAULT_RADIUS_NM)));
-  const feedUrl = `${ADSB_FI_URL}/lat/${CENTER.lat}/lon/${CENTER.lon}/dist/${radius}`;
+  const center = {
+    icao: (url.searchParams.get('icao') || DEFAULT_CENTER.icao).toUpperCase(),
+    lat: Number(url.searchParams.get('lat') || DEFAULT_CENTER.lat),
+    lon: Number(url.searchParams.get('lon') || DEFAULT_CENTER.lon),
+  };
+  if (!Number.isFinite(center.lat) || !Number.isFinite(center.lon)) {
+    return json({ error: 'lat and lon must be valid numbers' }, { status: 400 });
+  }
+  const feedUrl = `${ADSB_FI_URL}/lat/${center.lat}/lon/${center.lon}/dist/${radius}`;
   const res = await fetch(feedUrl, {
     headers: {
       Accept: 'application/json',
@@ -54,7 +62,7 @@ export default async (req) => {
     {
       fetched_utc: new Date().toISOString(),
       source: 'adsb.fi',
-      center: { icao: 'KVBT', ...CENTER },
+      center,
       radius_nm: radius,
       count: aircraft.length,
       aircraft,

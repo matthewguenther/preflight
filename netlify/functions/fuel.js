@@ -1,6 +1,5 @@
 import { requireAuth, json } from './_auth.js';
 
-const LOCAL_URL = 'https://www.airnav.com/airport/KVBT/LEGENDS_AIR_CENTER';
 const REPORT_URL = 'https://www.airnav.com/fuel/report.html';
 const MARKET_TREND_URL = 'https://generalaviationnews.com/2026/05/07/aviation-fuel-prices-up-again-in-april/';
 
@@ -27,6 +26,12 @@ const FALLBACK = {
     },
   },
 };
+
+function fuelUrlFor(icao) {
+  return icao === 'KVBT'
+    ? 'https://www.airnav.com/airport/KVBT/LEGENDS_AIR_CENTER'
+    : `https://www.airnav.com/airport/${icao}`;
+}
 
 async function fetchText(url) {
   const res = await fetch(url, {
@@ -55,7 +60,7 @@ function number(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseLocal(html) {
+function parseLocal(html, icao) {
   const text = htmlToText(html);
   const updated = /Fuel prices as last reported on\s+([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})/i.exec(text)?.[1] || FALLBACK.local.updated;
   const avgas = /100LL Avgas\s+Full service\s+\$([0-9.]+)/i.exec(text)?.[1];
@@ -63,6 +68,7 @@ function parseLocal(html) {
 
   return {
     ...FALLBACK.local,
+    airport: icao,
     updated,
     fuels: [
       { ...FALLBACK.local.fuels[0], price_per_gal: number(avgas) ?? FALLBACK.local.fuels[0].price_per_gal },
@@ -133,15 +139,18 @@ export default async (req) => {
   const auth = requireAuth(req.headers);
   if (!auth.ok) return json({ error: auth.message }, { status: auth.status });
 
-  let local = FALLBACK.local;
+  const url = new URL(req.url);
+  const icao = (url.searchParams.get('icao') || 'KVBT').toUpperCase();
+  const localUrl = fuelUrlFor(icao);
+  let local = { ...FALLBACK.local, airport: icao, fbo: icao === 'KVBT' ? FALLBACK.local.fbo : 'Airport fuel listing' };
   let market = FALLBACK.market;
   const warnings = [];
 
-  const [localResult, reportResult] = await Promise.allSettled([fetchText(LOCAL_URL), fetchText(REPORT_URL)]);
+  const [localResult, reportResult] = await Promise.allSettled([fetchText(localUrl), fetchText(REPORT_URL)]);
   if (localResult.status === 'fulfilled') {
-    local = parseLocal(localResult.value);
+    local = parseLocal(localResult.value, icao);
   } else {
-    warnings.push('Local fuel page unavailable; using last known KVBT prices.');
+    warnings.push(`Local fuel page unavailable; using last known ${icao} fallback prices.`);
   }
   if (reportResult.status === 'fulfilled') {
     market = parseMarket(reportResult.value);
@@ -166,7 +175,7 @@ export default async (req) => {
         },
       },
       sources: [
-        { label: 'AirNav KVBT FBO fuel prices', url: LOCAL_URL },
+        { label: 'AirNav airport fuel prices', url: localUrl },
         { label: 'AirNav fuel price report', url: REPORT_URL },
         { label: 'iFlightPlanner April trend summary via General Aviation News', url: MARKET_TREND_URL },
       ],

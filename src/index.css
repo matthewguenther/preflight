@@ -49,6 +49,23 @@ textarea {
   flex-direction: column;
   border-right: 1px solid rgba(125, 166, 204, 0.2);
   background: linear-gradient(180deg, rgba(4, 20, 37, 0.98), rgba(1, 11, 22, 0.98));
+  transition: width 180ms ease, flex-basis 180ms ease;
+}
+
+.ops-sidebar.collapsed {
+  width: 74px;
+  flex-basis: 74px;
+}
+
+.ops-sidebar.collapsed .brand-word,
+.ops-sidebar.collapsed .ops-nav-item span,
+.ops-sidebar.collapsed .sidebar-profile {
+  display: none;
+}
+
+.ops-sidebar.collapsed .ops-nav-item {
+  justify-content: center;
+  padding-inline: 0.65rem;
 }
 
 .brand-mark {
@@ -104,8 +121,9 @@ textarea {
     #d5dce7 19px 25px
   );
   filter: drop-shadow(0 0 14px rgba(240, 68, 22, 0.28));
-  transform: rotate(-5deg);
+  transform: rotate(-5deg) skewY(0deg);
   transform-origin: left center;
+  animation: windsockFlutter 2.8s ease-in-out infinite;
 }
 
 .ops-nav-item {
@@ -144,8 +162,18 @@ textarea {
   backdrop-filter: blur(18px);
 }
 
+.topbar-search {
+  width: min(520px, calc(100vw - 7rem));
+  min-width: 15rem;
+}
+
+.topbar-search .airport-search {
+  width: 100%;
+}
+
 .ops-outline-button,
-.ops-small-button {
+.ops-small-button,
+.ops-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -157,6 +185,12 @@ textarea {
   font-size: 0.8rem;
   font-weight: 800;
   padding: 0.55rem 0.8rem;
+}
+
+.ops-icon-button {
+  height: 2.25rem;
+  width: 2.25rem;
+  padding: 0;
 }
 
 .ops-small-button {
@@ -208,6 +242,121 @@ textarea {
   backdrop-filter: blur(10px);
 }
 
+.live-data-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(91, 151, 194, 0.26);
+  border-top: 0;
+  background:
+    linear-gradient(90deg, rgba(3, 24, 41, 0.92), rgba(2, 14, 27, 0.84)),
+    radial-gradient(circle at 0% 50%, rgba(34, 197, 94, 0.12), transparent 22rem);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+}
+
+.live-data-strip.warning {
+  background:
+    linear-gradient(90deg, rgba(3, 24, 41, 0.92), rgba(2, 14, 27, 0.84)),
+    radial-gradient(circle at 0% 50%, rgba(251, 191, 36, 0.12), transparent 22rem);
+}
+
+.live-data-strip.error {
+  background:
+    linear-gradient(90deg, rgba(3, 24, 41, 0.92), rgba(2, 14, 27, 0.84)),
+    radial-gradient(circle at 0% 50%, rgba(248, 113, 113, 0.14), transparent 22rem);
+}
+
+.live-data-summary {
+  display: flex;
+  min-width: 10rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.live-data-dot {
+  position: relative;
+  height: 0.6rem;
+  width: 0.6rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.5);
+}
+
+.live-data-dot::after {
+  content: "";
+  position: absolute;
+  inset: -0.35rem;
+  border: 1px solid rgba(52, 211, 153, 0.42);
+  border-radius: inherit;
+  animation: liveDataPing 1.8s ease-out infinite;
+}
+
+.live-data-strip.warning .live-data-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.42);
+}
+
+.live-data-strip.warning .live-data-dot::after {
+  border-color: rgba(251, 191, 36, 0.38);
+}
+
+.live-data-strip.error .live-data-dot {
+  background: #f87171;
+  box-shadow: 0 0 18px rgba(248, 113, 113, 0.42);
+}
+
+.live-data-strip.error .live-data-dot::after {
+  border-color: rgba(248, 113, 113, 0.38);
+}
+
+.live-data-feeds {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.live-data-feed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(148, 183, 217, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.38rem 0.62rem;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.live-data-feed span {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.live-data-feed strong {
+  color: #dce8f5;
+  font-weight: 800;
+}
+
+.live-data-feed.live strong {
+  color: #a7f3d0;
+}
+
+.live-data-feed.warning strong,
+.live-data-feed.loading strong {
+  color: #fde68a;
+}
+
+.live-data-feed.error strong {
+  color: #fecaca;
+}
+
 .ops-layout {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -220,6 +369,15 @@ textarea {
     "lesson lesson lesson checkride checkride checkride traffic traffic traffic traffic traffic traffic"
     "progress progress progress progress expenses expenses expenses logbook logbook logbook logbook logbook"
     "ground ground ground ground expenses expenses expenses logbook logbook logbook logbook logbook";
+}
+
+.sitrep-layout {
+  grid-template-areas:
+    "weather weather weather weather runway runway runway overview overview overview alternates alternates"
+    "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams"
+    "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams"
+    "changes changes changes changes changes changes notams notams notams notams notams notams"
+    "fuel fuel fuel fuel fuel fuel sources sources sources sources sources sources";
 }
 
 .area-readiness {
@@ -252,6 +410,30 @@ textarea {
 
 .area-fuel {
   grid-area: fuel;
+}
+
+.area-runway {
+  grid-area: runway;
+}
+
+.area-notams {
+  grid-area: notams;
+}
+
+.area-overview {
+  grid-area: overview;
+}
+
+.area-alternates {
+  grid-area: alternates;
+}
+
+.area-changes {
+  grid-area: changes;
+}
+
+.area-sources {
+  grid-area: sources;
 }
 
 .area-ground {
@@ -389,6 +571,261 @@ textarea {
   padding: 0.35rem 0.5rem;
 }
 
+.airport-search {
+  display: flex;
+  width: min(430px, 100%);
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid rgba(148, 183, 217, 0.32);
+  border-radius: 0.55rem;
+  background: rgba(2, 14, 27, 0.7);
+  padding: 0.45rem 0.55rem 0.45rem 0.8rem;
+  color: #f8fbff;
+  backdrop-filter: blur(12px);
+}
+
+.airport-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  outline: none;
+  text-transform: uppercase;
+}
+
+.airport-search button {
+  border-radius: 0.4rem;
+  background: #f04416;
+  padding: 0.46rem 0.75rem;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.sitrep-status-card {
+  align-self: stretch;
+}
+
+.runway-visual {
+  position: relative;
+  display: grid;
+  min-height: 190px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(148, 183, 217, 0.18);
+  border-radius: 0.45rem;
+  background:
+    linear-gradient(rgba(125, 166, 204, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 166, 204, 0.08) 1px, transparent 1px),
+    rgba(2, 10, 19, 0.64);
+  background-size: 28px 28px;
+}
+
+.runway-bar {
+  position: relative;
+  height: 146px;
+  width: 34px;
+  border: 1px solid rgba(248, 251, 255, 0.78);
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, rgba(248, 251, 255, 0.1), transparent 18%, transparent 82%, rgba(248, 251, 255, 0.1)),
+    rgba(2, 10, 19, 0.8);
+  box-shadow: 0 0 22px rgba(125, 211, 252, 0.18);
+}
+
+.runway-bar::before,
+.runway-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  background: repeating-linear-gradient(90deg, rgba(248, 251, 255, 0.72) 0 5px, transparent 5px 10px);
+}
+
+.runway-bar::before {
+  top: 0;
+}
+
+.runway-bar::after {
+  bottom: 0;
+}
+
+.runway-centerline {
+  position: absolute;
+  top: 23px;
+  bottom: 23px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: repeating-linear-gradient(180deg, rgba(248, 251, 255, 0.84) 0 14px, transparent 14px 24px);
+}
+
+.runway-end {
+  position: absolute;
+  left: 50%;
+  z-index: 3;
+  color: #ff5a1d;
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1;
+  transform: translateX(-50%);
+  text-shadow:
+    0 0 8px rgba(240, 68, 22, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.runway-end.top {
+  top: 16px;
+}
+
+.runway-end.bottom {
+  bottom: 16px;
+  transform: translateX(-50%) rotate(180deg);
+}
+
+.wind-arrow {
+  position: absolute;
+  top: 0.85rem;
+  z-index: 5;
+  height: 56px;
+  width: 2px;
+  transform-origin: 50% 5rem;
+  background: #f04416;
+  box-shadow: 0 0 16px rgba(240, 68, 22, 0.35);
+}
+
+.wind-arrow::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  height: 12px;
+  width: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  border-left: 2px solid #f04416;
+  border-top: 2px solid #f04416;
+}
+
+.alternate-row {
+  color: inherit;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.alternate-row:hover {
+  border-color: rgba(240, 68, 22, 0.24);
+  background: rgba(240, 68, 22, 0.08);
+  transform: translateY(-1px);
+}
+
+.radar-range-control {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid rgba(148, 183, 217, 0.22);
+  border-radius: 0.4rem;
+  background: rgba(2, 14, 27, 0.58);
+}
+
+.radar-range-control button {
+  padding: 0.36rem 0.55rem;
+  color: #cbd8e6;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.radar-range-control button.active {
+  background: rgba(240, 68, 22, 0.88);
+  color: #fff;
+}
+
+.traffic-marker-active svg {
+  color: #fff;
+  filter: drop-shadow(0 0 14px rgba(248, 251, 255, 0.75));
+  transform-origin: center;
+}
+
+.notam-item {
+  border: 1px solid rgba(148, 183, 217, 0.14);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.7rem;
+}
+
+.notam-item summary {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.55rem;
+  color: #dce8f5;
+  font-size: 0.82rem;
+}
+
+.notam-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.notam-badge.critical {
+  background: rgba(248, 113, 113, 0.16);
+  color: #fca5a5;
+}
+
+.notam-badge.operational {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fcd34d;
+}
+
+.notam-badge.navigation {
+  background: rgba(125, 211, 252, 0.14);
+  color: #bae6fd;
+}
+
+.notam-badge.informational {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+}
+
+.alternate-row,
+.source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.65rem;
+}
+
+.alternate-row:last-child,
+.source-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.source-row span {
+  color: #cbd8e6;
+  font-size: 0.82rem;
+}
+
+.source-row strong {
+  margin-left: auto;
+  color: #fff;
+  font-size: 0.78rem;
+}
+
+.source-row small {
+  width: 7.5rem;
+  color: #7f98ad;
+  font-size: 0.7rem;
+  text-align: right;
+}
+
 .fuel-price-row {
   border: 1px solid rgba(148, 183, 217, 0.16);
   border-radius: 0.45rem;
@@ -505,7 +942,7 @@ textarea {
 }
 
 @media (max-width: 1980px) {
-  .ops-layout {
+  .ops-layout:not(.sitrep-layout) {
     grid-template-columns: repeat(6, minmax(0, 1fr));
     grid-template-areas:
       "readiness readiness readiness weather weather weather"
@@ -514,6 +951,16 @@ textarea {
       "lesson lesson lesson checkride checkride checkride"
       "progress progress progress expenses expenses expenses"
       "ground ground ground logbook logbook logbook";
+  }
+
+  .sitrep-layout {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-areas:
+      "weather weather weather runway runway runway"
+      "traffic traffic traffic traffic traffic traffic"
+      "notams notams notams overview overview overview"
+      "alternates alternates alternates changes changes changes"
+      "fuel fuel fuel sources sources sources";
   }
 }
 
@@ -539,7 +986,7 @@ textarea {
     padding: 2rem 1.25rem;
   }
 
-  .ops-layout {
+  .ops-layout:not(.sitrep-layout) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "readiness weather"
@@ -550,14 +997,43 @@ textarea {
       "ground logbook";
   }
 
+  .sitrep-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "weather runway"
+      "traffic traffic"
+      "notams notams"
+      "overview alternates"
+      "changes changes"
+      "fuel sources";
+  }
+
   .ops-bottom-strip {
     grid-template-columns: repeat(1, minmax(0, 1fr));
     padding: 1rem 1.25rem;
   }
+
+  .live-data-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .live-data-feeds {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 700px) {
-  .ops-layout {
+  .ops-topbar {
+    padding-inline: 0.75rem;
+  }
+
+  .topbar-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ops-layout:not(.sitrep-layout) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "readiness"
@@ -571,6 +1047,20 @@ textarea {
       "ground"
       "expenses"
       "logbook";
+  }
+
+  .sitrep-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "weather"
+      "runway"
+      "traffic"
+      "notams"
+      "overview"
+      "alternates"
+      "changes"
+      "fuel"
+      "sources";
   }
 
   .weather-radar {
@@ -971,5 +1461,28 @@ textarea {
   48%,
   100% {
     transform: translateX(120%);
+  }
+}
+
+@keyframes liveDataPing {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.72);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@keyframes windsockFlutter {
+  0%,
+  100% {
+    clip-path: polygon(0 0, 100% 25%, 100% 75%, 0 100%);
+    transform: rotate(-5deg) skewY(0deg);
+  }
+  50% {
+    clip-path: polygon(0 5%, 100% 17%, 100% 83%, 0 95%);
+    transform: rotate(-3deg) skewY(2deg);
   }
 }
