@@ -39,35 +39,6 @@ textarea {
     linear-gradient(180deg, #07182d 0%, #03101d 48%, #020913 100%);
 }
 
-.ops-sidebar {
-  position: sticky;
-  top: 0;
-  display: flex;
-  height: 100vh;
-  width: 220px;
-  flex: 0 0 220px;
-  flex-direction: column;
-  border-right: 1px solid rgba(125, 166, 204, 0.2);
-  background: linear-gradient(180deg, rgba(4, 20, 37, 0.98), rgba(1, 11, 22, 0.98));
-  transition: width 180ms ease, flex-basis 180ms ease;
-}
-
-.ops-sidebar.collapsed {
-  width: 74px;
-  flex-basis: 74px;
-}
-
-.ops-sidebar.collapsed .brand-word,
-.ops-sidebar.collapsed .ops-nav-item span,
-.ops-sidebar.collapsed .sidebar-profile {
-  display: none;
-}
-
-.ops-sidebar.collapsed .ops-nav-item {
-  justify-content: center;
-  padding-inline: 0.65rem;
-}
-
 .brand-mark {
   position: relative;
   height: 28px;
@@ -126,28 +97,6 @@ textarea {
   animation: windsockFlutter 3.4s ease-in-out infinite;
 }
 
-.ops-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 0.5rem;
-  padding: 0.8rem 0.85rem;
-  color: #cbd8e6;
-  font-size: 0.9rem;
-  font-weight: 700;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
-}
-
-.ops-nav-item:hover,
-.ops-nav-item.active {
-  color: #fff;
-  background: rgba(3, 55, 88, 0.78);
-}
-
-.ops-nav-item.active svg {
-  color: #ff4b18;
-}
-
 .ops-topbar {
   position: sticky;
   top: 0;
@@ -162,9 +111,19 @@ textarea {
   backdrop-filter: blur(18px);
 }
 
+.topbar-brand {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding-right: 1rem;
+  margin-right: 0.25rem;
+  border-right: 1px solid rgba(125, 166, 204, 0.18);
+}
+
 .topbar-search {
-  width: min(520px, calc(100vw - 7rem));
-  min-width: 15rem;
+  width: min(440px, calc(100vw - 22rem));
+  min-width: 12rem;
 }
 
 .topbar-search .airport-search {
@@ -191,6 +150,31 @@ textarea {
   height: 2.25rem;
   width: 2.25rem;
   padding: 0;
+}
+
+/* Card header reference links, styled as compact outlined chips so they read as
+   clickable actions instead of plain text. */
+.card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(240, 116, 70, 0.42);
+  border-radius: 0.4rem;
+  background: rgba(240, 68, 22, 0.12);
+  padding: 0.32rem 0.6rem;
+  color: #ffb695;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.card-action:hover {
+  border-color: rgba(240, 116, 70, 0.75);
+  background: rgba(240, 68, 22, 0.22);
+  color: #fff;
 }
 
 .ops-small-button {
@@ -374,8 +358,8 @@ textarea {
 
 .sitrep-layout {
   grid-template-areas:
-    "weather weather weather runway runway runway"
     "traffic traffic traffic traffic traffic traffic"
+    "weather weather weather runway runway runway"
     "notams notams notams overview overview overview"
     "alternates alternates alternates changes changes changes"
     "fuel fuel fuel sources sources sources";
@@ -981,19 +965,16 @@ textarea {
 }
 
 .ops-bottom-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
   border-top: 1px solid rgba(125, 166, 204, 0.18);
   background: rgba(2, 12, 23, 0.88);
-  padding: 1rem 3rem;
-  color: #f8fbff;
-}
-
-.ops-bottom-strip small {
-  display: block;
+  padding: 1.1rem 3rem;
   color: #92a8ba;
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
@@ -1011,27 +992,16 @@ textarea {
   .sitrep-layout {
     grid-template-columns: repeat(12, minmax(0, 1fr));
     grid-template-areas:
-      "weather weather weather runway runway runway overview overview overview alternates alternates alternates"
-      "weather weather weather fuel fuel fuel sources sources sources changes changes changes"
       "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams"
-      "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams";
+      "traffic traffic traffic traffic traffic traffic traffic traffic notams notams notams notams"
+      "weather weather weather runway runway runway overview overview overview alternates alternates alternates"
+      "weather weather weather fuel fuel fuel sources sources sources changes changes changes";
   }
 }
 
 @media (max-width: 900px) {
   .legends-dashboard {
     display: block;
-  }
-
-  .ops-sidebar {
-    position: static;
-    width: auto;
-    height: auto;
-  }
-
-  .ops-sidebar nav,
-  .ops-sidebar > div:last-child {
-    display: none;
   }
 
   .ops-hero {
@@ -1063,7 +1033,8 @@ textarea {
   }
 
   .ops-bottom-strip {
-    grid-template-columns: repeat(1, minmax(0, 1fr));
+    justify-content: center;
+    text-align: center;
     padding: 1rem 1.25rem;
   }
 
@@ -1082,8 +1053,13 @@ textarea {
     padding-inline: 0.75rem;
   }
 
+  .topbar-brand .brand-word {
+    display: none;
+  }
+
   .topbar-search {
-    width: 100%;
+    flex: 1;
+    width: auto;
     min-width: 0;
   }
 
@@ -1443,6 +1419,9 @@ textarea {
 }
 
 .traffic-scope {
+  /* isolate so the markers' high z-index values stay contained and don't paint
+     over the sticky topbar when the card scrolls underneath it. */
+  isolation: isolate;
   background:
     rgba(2, 6, 14, 0.92);
 }

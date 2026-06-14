@@ -1,21 +1,15 @@
 import {
   AlertTriangle,
   Bell,
-  Bookmark,
-  ChevronDown,
-  ClipboardList,
   Cloud,
   Compass,
   Database,
+  ExternalLink,
   Fuel,
   Gauge,
   Headphones,
-  Home,
   MapPin,
-  Plane,
-  RadioTower,
   Search,
-  Settings,
   Wind,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -30,7 +24,7 @@ import { useTfr } from './hooks/useTfr';
 import { useTraffic } from './hooks/useTraffic';
 import { useWeather } from './hooks/useWeather';
 import { densityAltitude } from './lib/densityAlt';
-import { formatLocal, todayLocalISO } from './lib/time';
+import { formatLocal } from './lib/time';
 
 const HERO_IMAGE = 'https://images.squarespace-cdn.com/content/v1/67f3ee1006d37e724190ac27/2eac87a2-5c81-4d45-a6ea-e56aca8203ad/Thaden-Exteriors-HR-007.jpg';
 const RADAR_ZOOM = 7;
@@ -200,10 +194,6 @@ function windComponents(windDir, windSpeed, runwayHeading) {
   };
 }
 
-function bestRunwayFor(airport, metar) {
-  return runwayWindOptions(airport, metar)[0] || null;
-}
-
 function runwayWindOptions(airport, metar) {
   const ends = runwayEnds(airport);
   if (!ends.length) return [];
@@ -356,50 +346,25 @@ function Card({ title, icon: Icon, action, children, className = '' }) {
   );
 }
 
-function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
-  const items = [
-    [Home, 'Dashboard'],
-    [MapPin, 'Airports'],
-    [Plane, 'Radar'],
-    [Cloud, 'Weather'],
-    [ClipboardList, 'NOTAMs'],
-    [Fuel, 'Fuel'],
-    [Compass, 'Alternates'],
-    [Bookmark, 'Saved'],
-    [Settings, 'Settings'],
-  ];
+// Card header actions are external reference links. Styling them as small
+// outlined chips (rather than bare text) gives a clear clickable affordance,
+// and the trailing icon signals the link opens in a new tab.
+function CardActionLink({ href, icon: Icon = ExternalLink, children }) {
   return (
-    <aside className={`ops-sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <button className="flex items-center gap-3 px-4 pt-6 text-left" onClick={() => setCollapsed((value) => !value)} title="Toggle sidebar" type="button">
-        <div className="brand-mark"><span /></div>
-        <div className="brand-word text-2xl font-black italic tracking-tight text-white">PREFLIGHT</div>
-      </button>
-      <nav className="mt-8 space-y-2 px-4">
-        {items.map(([Icon, label], index) => (
-          <a key={label} className={`ops-nav-item ${index === 0 ? 'active' : ''}`} href={`#${label.toLowerCase().replace(/\s+/g, '-')}`} title={collapsed ? label : undefined}>
-            <Icon size={16} />
-            <span>{label}</span>
-          </a>
-        ))}
-      </nav>
-      <div className="mt-auto border-t border-white/10 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-500 text-sm font-bold text-white">PF</div>
-          <div className="sidebar-profile min-w-0">
-            <div className="truncate text-sm font-semibold text-white">Airport SITREP</div>
-            <div className="text-xs text-slate-400">Pilot briefing</div>
-          </div>
-          <ChevronDown size={15} className="sidebar-profile ml-auto text-slate-500" />
-        </div>
-      </div>
-    </aside>
+    <a className="card-action" href={href} target="_blank" rel="noreferrer">
+      {children}
+      {Icon ? <Icon size={12} /> : null}
+    </a>
   );
 }
 
 function TopBar({ selectedIcao, onSelect }) {
   return (
     <header className="ops-topbar">
+      <div className="topbar-brand">
+        <div className="brand-mark"><span /></div>
+        <div className="brand-word text-xl font-black italic tracking-tight text-white">PREFLIGHT</div>
+      </div>
       <div className="topbar-search">
         <AirportSearch selectedIcao={selectedIcao} onSelect={onSelect} />
       </div>
@@ -539,7 +504,7 @@ function WeatherCard({ airport, weather }) {
   const metar = weather?.metar || {};
   const da = densityAltitude(airport?.elevation_ft, metar.temp_c, metar.altimeter_inhg);
   return (
-    <Card title="Weather" icon={Cloud} className="area-weather" action={<a className="text-xs font-bold text-orange-400 hover:text-orange-300" href={aviationWeatherUrl(airport)} target="_blank" rel="noreferrer">Briefing</a>}>
+    <Card title="Weather" icon={Cloud} className="area-weather" action={<CardActionLink href={aviationWeatherUrl(airport)}>Briefing</CardActionLink>}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Cloud size={32} className="text-white" />
@@ -557,6 +522,11 @@ function WeatherCard({ airport, weather }) {
         <Metric label="Altimeter" value={`${metar.altimeter_inhg ?? '--'} inHg`} />
         <Metric label="Density Alt." value={da == null ? '--' : `${da.toLocaleString()} ft`} />
       </div>
+      {metar.raw && (metar.temp_c == null || metar.dewpoint_c == null) ? (
+        <div className="mt-4 rounded-md border border-amber-300/20 bg-amber-500/10 p-2 text-[11px] text-amber-100">
+          This station isn&apos;t reporting temperature/dew point right now, so dew point and density altitude show as --.
+        </div>
+      ) : null}
       <div className="mt-4 rounded-md bg-slate-950/60 p-3 font-mono text-xs leading-relaxed text-slate-300">{metar.raw || 'METAR unavailable.'}</div>
       <WeatherRadar airport={airport} />
     </Card>
@@ -574,7 +544,7 @@ function RunwayWindCard({ airport, weather }) {
   const windDisplay = metar.wind_dir_deg == null ? 'VRB' : `${metar.wind_dir_deg} deg`;
   const gustDisplay = metar.wind_gust_kt ? `G${metar.wind_gust_kt}` : 'No gust';
   return (
-    <Card title="Runway / Wind" icon={Wind} className="area-runway" action={<a className="text-xs font-bold text-orange-400 hover:text-orange-300" href={skyVectorUrl(airport)} target="_blank" rel="noreferrer">Chart</a>}>
+    <Card title="Runway / Wind" icon={Wind} className="area-runway" action={<CardActionLink href={skyVectorUrl(airport)}>Chart</CardActionLink>}>
       <div className="runway-visual">
         <div className="wind-arrow" style={{ transform: `rotate(${(metar.wind_dir_deg || 0) + 180}deg)` }} />
         <div className="runway-bar">
@@ -686,7 +656,7 @@ function NotamCard({ notams, airport, warning }) {
     items: (notams || []).filter((notam) => classifyNotam(notam) === label),
   }));
   return (
-    <Card title="NOTAM Triage" icon={AlertTriangle} className="area-notams" action={<a className="text-xs font-bold text-orange-400 hover:text-orange-300" href={faaNotamSearchUrl(airport)} target="_blank" rel="noreferrer">FAA Search</a>}>
+    <Card title="NOTAM Triage" icon={AlertTriangle} className="area-notams" action={<CardActionLink href={faaNotamSearchUrl(airport)}>FAA Search</CardActionLink>}>
       {warning ? <div className="mb-4 rounded-md border border-amber-300/20 bg-amber-500/10 p-3 text-xs text-amber-100">{warning}</div> : null}
       <div className="space-y-4">
         {groups.map((group) => (
@@ -715,7 +685,7 @@ function AirportOverviewCard({ airport }) {
       title="Airport Overview"
       icon={MapPin}
       className="area-overview"
-      action={<a className="inline-flex items-center gap-1 text-xs font-bold text-orange-400 hover:text-orange-300" href={liveAtcUrl(airport)} target="_blank" rel="noreferrer"><Headphones size={13} /> LiveATC</a>}
+      action={<CardActionLink href={liveAtcUrl(airport)} icon={Headphones}>LiveATC</CardActionLink>}
     >
       <div className="grid grid-cols-2 gap-4 text-sm">
         <Metric label="Identifier" value={airport?.icao || '--'} />
@@ -794,16 +764,12 @@ function SourceFreshnessCard({ airportQuery, weatherQuery, notamsQuery, trafficQ
   );
 }
 
-function BottomStrip({ airport, weather }) {
-  const metar = weather?.metar || {};
-  const best = bestRunwayFor(airport, metar);
+function BottomStrip() {
   return (
-    <div className="ops-bottom-strip">
-      <div className="flex items-center gap-3"><Gauge size={24} /> <span>{formatLocal(new Date().toISOString(), 'h:mm a zzz')}<small>{todayLocalISO()}</small></span></div>
-      <div className="flex items-center gap-3"><Wind size={24} /> <span>{metar.wind_dir_deg ?? 'VRB'} / {metar.wind_speed_kt ?? '--'} kt<small>{metar.wind_gust_kt ? `Gust ${metar.wind_gust_kt}` : 'Current wind'}</small></span></div>
-      <a className="flex items-center gap-3 hover:text-orange-400" href={skyVectorUrl(airport)} target="_blank" rel="noreferrer"><RadioTower size={24} /> <span>{best ? `RWY ${best.id}` : 'Runways'}<small>{airport?.runways?.[0]?.length_ft ? `${airport.runways[0].length_ft.toLocaleString()} ft` : 'Diagram'}</small></span></a>
-      <a className="flex items-center gap-3 hover:text-orange-400" href={liveAtcUrl(airport)} target="_blank" rel="noreferrer"><Headphones size={24} /> <span>LiveATC<small>{airport?.icao || '--'}</small></span></a>
-    </div>
+    <footer className="ops-bottom-strip">
+      <span>&copy; {new Date().getFullYear()} Preflight. For situational awareness only.</span>
+      <span>Always verify with official sources before flight.</span>
+    </footer>
   );
 }
 
@@ -847,7 +813,6 @@ export default function App() {
 
   return (
     <div className="legends-dashboard min-h-screen">
-      <Sidebar />
       <div className="min-w-0 flex-1">
         <TopBar selectedIcao={selectedIcao} onSelect={setSelectedIcao} />
         <main className="px-5 py-5 xl:px-8">
@@ -866,7 +831,7 @@ export default function App() {
             <SourceFreshnessCard airportQuery={airportQuery} weatherQuery={weatherQuery} notamsQuery={notamsQuery} trafficQuery={trafficQuery} fuelQuery={fuelQuery} radarQuery={radarQuery} />
           </div>
         </main>
-        <BottomStrip airport={airport} weather={weatherQuery.data} />
+        <BottomStrip />
       </div>
     </div>
   );
