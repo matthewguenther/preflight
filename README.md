@@ -1,7 +1,7 @@
 # Preflight
 
 <p align="center">
-  <img src="logo_SMALL.png" alt="Preflight logo" width="200">
+  <img src="logo_SMALL.png" alt="Preflight logo">
 </p>
 
 **An at-a-glance situational-awareness dashboard for the student- and private-pilot (PPL) community.**
