@@ -177,6 +177,26 @@ Preflight is a personal project provided for educational and situational-awarene
 
 ---
 
+## A Note on How This Was Built
+
+This project was built with significant help from AI (Claude). I worked as a web developer early in my career, but that was a long time ago, and I'll happily admit those skills have gotten rusty in the years since. Preflight is a domain project built by someone scratching their own itch — a tool to solve a real problem I had as a student pilot — not a polished commercial product.
+
+What I've checked so far has mostly been hands-on:
+
+- Manual testing in the browser against a range of real U.S. airports (towered and non-towered, single- and multi-runway, with and without live fuel/NOTAM data)
+- That each panel degrades gracefully when its data source is unavailable or returns nothing
+- ESLint passes cleanly
+
+That leaves plenty I'd genuinely welcome a second set of eyes on:
+
+- **Security & input validation** — especially the Netlify Functions and how external API data is handled
+- **Edge cases** I haven't thought to test
+- **Code quality & idiomatic patterns** — places where this isn't the modern, idiomatic way to do things
+
+Issues and PRs are genuinely welcome — including blunt "this is bad practice, here's why" feedback. I'm here to learn.
+
+---
+
 ## License
 
 Released under the [MIT License](LICENSE).
