@@ -10,6 +10,8 @@ Preflight pulls the critical pre-flight information a pilot needs about any U.S.
 
 🔗 **Live site:** https://preflightapp.netlify.app/
 
+This repository is the source for that one live app. Contributions made here ship to the live site, so improvements reach every pilot who uses it — the goal is to make **Preflight** better together, not to spin up separate copies. See [Contributing](#contributing) to get involved.
+
 > ⚠️ **For situational awareness only.** Preflight is a convenience dashboard, **not** an official briefing source. Always verify with official FAA / NWS sources (1800wxbrief.com, aviationweather.gov, official NOTAM/TFR feeds) before every flight.
 
 ---
@@ -101,7 +103,9 @@ preflight/
 
 ---
 
-## Local Setup
+## Local Development
+
+Want to contribute? Here's how to get Preflight running on your machine to develop and test changes before opening a pull request.
 
 **Prerequisites:** Node.js 18+ and npm.
 
@@ -144,13 +148,21 @@ npm run dev
 
 ---
 
-## Deploy to Netlify
+## Contributing
 
-1. Connect this GitHub repo to a Netlify site.
-2. In **Site settings → Environment variables**, add the same variables from your `.env.local` (do **not** commit env files).
-3. Pushes to `main` build with `npm run build` and publish the `dist` directory.
+Preflight is **one live application**, and this repository is its source of truth. The goal isn't for everyone to run their own copy — it's to improve the single app that pilots actually use. When a change lands on `main`, it deploys automatically to [preflightapp.netlify.app](https://preflightapp.netlify.app/).
 
-After changing any `VITE_*` variable in Netlify, trigger a fresh deploy so the new value is embedded in the frontend bundle.
+Contributions of all sizes are welcome — bug fixes, new data sources, UI polish, or just blunt "this is bad practice, here's why" feedback.
+
+**Workflow:**
+
+1. **Fork** this repo and create a branch for your change.
+2. Get it running locally (see [Local Development](#local-development)) and test against a few real airports.
+3. Run `npm run lint` and make sure it passes.
+4. Open a **pull request** against `main` describing what you changed and why.
+5. Once reviewed and merged, your change ships to the live site automatically.
+
+Not sure where to start? Open an [issue](../../issues) — bug reports, feature ideas, and questions are all fair game.
 
 ---
 
