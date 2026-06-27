@@ -1,38 +1,182 @@
 # Preflight
 
-Preflight is a personal Private Pilot License training dashboard for KVBT / Thaden Field. It combines live aviation weather, go/no-go personal minimum checks, lesson scheduling, logbook progress, ground school status, checkride readiness, aircraft reference data, and expense tracking in a single React + Netlify app.
+**An at-a-glance situational-awareness dashboard for the student- and private-pilot (PPL) community.**
+
+Preflight pulls the critical pre-flight information a pilot needs about any U.S. airport — live weather, winds and runway selection, precipitation radar, nearby traffic, NOTAMs, TFRs, fuel prices, frequencies, and nearby alternates — and presents it on a single, fast-loading "SITREP" screen.
+
+🔗 **Live site:** https://preflightapp.netlify.app/
+
+> ⚠️ **For situational awareness only.** Preflight is a convenience dashboard, **not** an official briefing source. Always verify with official FAA / NWS sources (1800wxbrief.com, aviationweather.gov, official NOTAM/TFR feeds) before every flight.
+
+---
+
+## Screenshot
+
+The dashboard is a long, single-page layout. A full-page capture is included in the repo:
+
+<details>
+<summary>📸 <strong>Click to view the full-page screenshot</strong></summary>
+
+<br>
+
+[![Preflight dashboard — full page](screenshot.png)](screenshot.png)
+
+</details>
+
+> The image is large — [open `screenshot.png` directly](screenshot.png) for full resolution.
+
+---
+
+## Features
+
+Enter any U.S. airport identifier (ICAO or 3-letter FAA code) and Preflight assembles a live operations picture:
+
+| Panel | What it shows |
+| --- | --- |
+| **Airport SITREP** | A single favorable / review / not-recommended call synthesized from weather, winds, NOTAMs, and nearby TFRs — with the reasoning bullets behind it. |
+| **Live Data strip** | Per-feed freshness (live / stale / unavailable) so you always know how current the picture is. |
+| **Weather** | Current METAR, flight category, wind, visibility, ceiling, temp/dew point, altimeter, and a rule-of-thumb **density altitude**, plus the raw METAR string. |
+| **Precipitation radar** | RainViewer radar tiles composited over an OpenStreetMap base, centered on the airport — no map library required. |
+| **Runway / Wind** | Ranks every runway end by headwind component, with head/tail/crosswind and gust breakdowns for the best option. |
+| **Fuel Prices** | 100LL / Jet-A prices from AirNav with a comparison against the market/national average. |
+| **Traffic Scope** | Nearby ADS-B traffic (callsign, type, altitude, speed, track) within a configurable radius. |
+| **NOTAM Triage** | NOTAMs auto-bucketed into Critical / Operational / Navigation / Informational, with the raw text one click away. |
+| **Airport Overview** | Elevation, runways, tower status, services, beacon, and CTAF/approach/clearance frequencies. |
+| **Nearby Alternates** | Closest reporting airports with distance, bearing, and current flight category — click to jump to that airport. |
+| **What Changed?** | Diffs the current snapshot against your last visit (wind shift, ceiling, traffic count, NOTAM count, altimeter). |
+| **Data Freshness** | Age and source of every feed in one place. |
+
+Quick links throughout the UI deep-link to SkyVector charts, LiveATC, the AviationWeather briefing, and the FAA NOTAM search for the selected airport.
+
+---
+
+## Data Sources
+
+All core feeds are **free and require no API key**. Requests are proxied through Netlify Functions (never called directly from the browser), which keeps third-party hosts happy and centralizes auth.
+
+| Feed | Source |
+| --- | --- |
+| METAR / TAF / winds / G-AIRMET | [AviationWeather.gov](https://aviationweather.gov/) (NOAA) |
+| Airport data & nearby stations | AviationWeather.gov + FAA |
+| Precipitation radar | [RainViewer](https://www.rainviewer.com/) |
+| Base map tiles | [OpenStreetMap](https://www.openstreetmap.org/) |
+| ADS-B traffic | [adsb.fi](https://adsb.fi/) open data |
+| Fuel prices | [AirNav](https://www.airnav.com/) |
+| TFRs | FAA TFR API + AviationWeather |
+| Airport imagery | Wikipedia API |
+| NOTAMs | [FAA NOTAM API](https://api.faa.gov/) *(requires free credentials — see below)* |
+
+---
+
+## Tech Stack
+
+- **Frontend:** React 18, Vite 5, Tailwind CSS 3, [TanStack React Query](https://tanstack.com/query) for fetching/caching, `lucide-react` icons, `date-fns` / `date-fns-tz`, Recharts.
+- **Backend:** [Netlify Functions](https://docs.netlify.com/functions/overview/) (serverless), bundled with esbuild. A shared bearer-token guard gates every function.
+- **Persistence:** [Netlify Blobs](https://docs.netlify.com/blobs/overview/) (used for personal config such as saved minimums).
+- **Hosting:** Netlify (static `dist` + functions), continuous deploy from `main`.
+
+---
+
+## Project Structure
+
+```
+preflight/
+├── src/
+│   ├── App.jsx              # Dashboard composition + aviation helpers
+│   ├── components/          # UI: panels, layout, forms, primitives
+│   ├── hooks/               # React Query hooks (one per data feed)
+│   └── lib/                 # api client, constants, density alt, crosswind, go/no-go, time
+├── netlify/
+│   └── functions/          # Serverless proxies: weather, traffic, fuel, airport,
+│                           #   radar, tfr, notams, airport-image, blobs, export
+├── public/                  # Static assets
+├── netlify.toml             # Build / dev / security-header config
+├── .env.example             # Environment variable template
+└── vite.config.js
+```
+
+---
 
 ## Local Setup
 
-1. Clone the repo and run `npm install`.
-2. Copy `.env.example` to `.env.local`.
-3. Generate a shared auth token with `openssl rand -hex 32`.
-4. Set both `VITE_API_AUTH_TOKEN` and `API_AUTH_TOKEN` to that token.
-5. Register at `api.faa.gov` for NOTAM credentials and set `FAA_NOTAM_CLIENT_ID` and `FAA_NOTAM_CLIENT_SECRET`.
-6. Run `npm run dev` and open `http://localhost:8888`.
+**Prerequisites:** Node.js 18+ and npm.
 
-## Deploy To Netlify
+```bash
+# 1. Install dependencies
+npm install
 
-Connect the GitHub repo to a Netlify site. In the Netlify UI, set the same environment variables from `.env.local` without committing that file. Pushes to `main` will build with `npm run build` and publish `dist`.
+# 2. Create your local env file
+cp .env.example .env.local
 
-Required Netlify environment variables:
+# 3. Generate a shared auth token (any 32+ char random string works)
+openssl rand -hex 32
+```
 
-- `API_AUTH_TOKEN`: server-side token used by Netlify Functions.
-- `VITE_API_AUTH_TOKEN`: browser-side token sent to Netlify Functions. This must exactly match `API_AUTH_TOKEN` and must be present before the Vite build runs.
-- `VITE_AIRPORT_ICAO`: optional, defaults to `KVBT`.
-- `FAA_NOTAM_CLIENT_ID` and `FAA_NOTAM_CLIENT_SECRET`: optional, only needed for live NOTAM data.
-- `FSP_API_KEY` and `FSP_CLUB_ID`: optional, only if Flight Schedule Pro API access is available.
+Set **both** of these to that same value in `.env.local`:
 
-After changing any `VITE_` variable in Netlify, trigger a new deploy so the value is embedded into the frontend bundle.
+- `VITE_API_AUTH_TOKEN` — sent by the browser
+- `API_AUTH_TOKEN` — validated by the functions
 
-## Backup Strategy
+Then start the dev server (Netlify Dev runs Vite + the functions together):
 
-Use the in-app Download backup button. It calls `/.netlify/functions/export` and saves `preflight-backup-YYYY-MM-DD.json`. A monthly local backup is recommended.
+```bash
+npm run dev
+# open http://localhost:8888
+```
+
+> NOTAMs are the only feed that needs credentials. Without them, every other panel works and the NOTAM card simply shows a "not configured" notice.
+
+### Environment Variables
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `API_AUTH_TOKEN` | ✅ | Server-side token used by Netlify Functions to authorize requests. |
+| `VITE_API_AUTH_TOKEN` | ✅ | Browser-side token sent to the functions. **Must exactly match** `API_AUTH_TOKEN` and be present *before* the Vite build runs. |
+| `VITE_AIRPORT_ICAO` | optional | Default airport on first load (defaults to `KVBT`). |
+| `FAA_NOTAM_CLIENT_ID` | optional | FAA NOTAM API client ID — register free at [api.faa.gov](https://api.faa.gov/). |
+| `FAA_NOTAM_CLIENT_SECRET` | optional | FAA NOTAM API client secret. |
+
+> ℹ️ **Security note:** `VITE_*` variables are compiled into the browser bundle and are therefore readable by anyone who loads the page. The shared token only deters random scanners from hitting the function URLs directly — it is **not** a secret and is not meant to protect against a determined visitor. Keep your *local* token different from production, and never reuse a real secret in a `VITE_` variable.
+
+---
+
+## Deploy to Netlify
+
+1. Connect this GitHub repo to a Netlify site.
+2. In **Site settings → Environment variables**, add the same variables from your `.env.local` (do **not** commit env files).
+3. Pushes to `main` build with `npm run build` and publish the `dist` directory.
+
+After changing any `VITE_*` variable in Netlify, trigger a fresh deploy so the new value is embedded in the frontend bundle.
+
+---
 
 ## Known Limitations
 
-- Density altitude uses a rule-of-thumb formula.
-- Va is shown from the configured table and defaults to the max-gross row.
-- The v1 UI is primarily designed around one aircraft, though `FLEET` supports more.
-- Ground school topics are manually tracked; there is no Sporty's API integration.
-- Flight Schedule Pro is intentionally left disabled until API access and endpoint details are confirmed.
+- **Density altitude** uses a rule-of-thumb formula, not a full performance calculation.
+- The **go/no-go SITREP** is a heuristic aid for review — it is not a substitute for a full weather briefing or pilot judgment.
+- **Fuel and NOTAM** data is normalized from third-party sources whose formats change over time; always confirm against the official source links provided in-app.
+- Coverage and accuracy of ADS-B traffic depend on the adsb.fi community network.
+
+---
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Netlify Dev (Vite + functions) on `http://localhost:8888`. |
+| `npm run vite-only` | Vite dev server only (no functions). |
+| `npm run build` | Production build to `dist/`. |
+| `npm run preview` | Preview the production build. |
+| `npm run lint` | ESLint over `src`. |
+
+---
+
+## Disclaimer
+
+Preflight is a personal project provided for educational and situational-awareness purposes only. It is **not** an approved source for flight planning, weather briefing, or operational decisions. The author assumes no responsibility for decisions made using this tool. **The pilot in command is always responsible for verifying all information against official sources.**
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).
