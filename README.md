@@ -1,5 +1,9 @@
 # Preflight
 
+<p align="center">
+  <img src="logo_SMALL.png" alt="Preflight logo" width="200">
+</p>
+
 **An at-a-glance situational-awareness dashboard for the student- and private-pilot (PPL) community.**
 
 Preflight pulls the critical pre-flight information a pilot needs about any U.S. airport — live weather, winds and runway selection, precipitation radar, nearby traffic, NOTAMs, TFRs, fuel prices, frequencies, and nearby alternates — and presents it on a single, fast-loading "SITREP" screen.
