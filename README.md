@@ -140,7 +140,7 @@ npm run dev
 | --- | --- | --- |
 | `API_AUTH_TOKEN` | ✅ | Server-side token used by Netlify Functions to authorize requests. |
 | `VITE_API_AUTH_TOKEN` | ✅ | Browser-side token sent to the functions. **Must exactly match** `API_AUTH_TOKEN` and be present *before* the Vite build runs. |
-| `VITE_AIRPORT_ICAO` | optional | Default airport on first load (defaults to `KVBT`). |
+| `VITE_AIRPORT_ICAO` | optional | Pins a default airport for first-time visitors. When unset, the app shows a search prompt instead of pre-loading an airport. (Returning visitors always resume their last-used airport.) |
 | `FAA_NOTAM_CLIENT_ID` | optional | FAA NOTAM API client ID — register free at [api.faa.gov](https://api.faa.gov/). |
 | `FAA_NOTAM_CLIENT_SECRET` | optional | FAA NOTAM API client secret. |
 

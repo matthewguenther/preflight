@@ -575,7 +575,8 @@ textarea {
   border: 0;
   background: transparent;
   color: #fff;
-  font-size: 0.92rem;
+  /* Keep at 16px+ so iOS Safari does not auto-zoom when the field is focused. */
+  font-size: 1rem;
   font-weight: 800;
   outline: none;
   text-transform: uppercase;
@@ -1521,5 +1522,181 @@ textarea {
   72% {
     clip-path: polygon(0 1%, 100% 30%, 100% 70%, 0 99%);
     transform: rotate(-10deg) skewY(-3deg) translateY(1px);
+  }
+}
+
+/* Full-screen airport search landing, shown until an airport is selected. */
+.airport-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* dvh keeps the panel fully visible when mobile browser chrome or the
+     on-screen keyboard shrinks the viewport; safe-area insets clear notches. */
+  min-height: 100dvh;
+  padding:
+    calc(2rem + env(safe-area-inset-top)) calc(1.25rem + env(safe-area-inset-right))
+    calc(2rem + env(safe-area-inset-bottom)) calc(1.25rem + env(safe-area-inset-left));
+  background:
+    linear-gradient(115deg, rgba(5, 32, 54, 0.98), rgba(3, 12, 24, 0.92)),
+    radial-gradient(circle at 70% 20%, rgba(91, 151, 194, 0.22), transparent 28rem);
+}
+
+.airport-prompt-panel {
+  width: min(560px, 100%);
+  text-align: center;
+}
+
+.airport-prompt-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 2rem;
+}
+
+.airport-prompt-emblem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  width: 2.25rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(180deg, #ff5a1d, #f04416);
+  color: #fff;
+}
+
+.airport-prompt-word {
+  font-size: 1.1rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.airport-prompt-title {
+  font-size: clamp(1.9rem, 6vw, 2.9rem);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.airport-prompt-sub {
+  margin: 0.9rem auto 0;
+  max-width: 30rem;
+  font-size: 1rem;
+  color: rgba(203, 216, 230, 0.85);
+}
+
+.airport-prompt-form {
+  margin-top: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.airport-prompt-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid rgba(148, 183, 217, 0.34);
+  border-radius: 0.65rem;
+  background: rgba(2, 14, 27, 0.72);
+  padding: 0.85rem 1rem;
+  color: #9fb6cd;
+  backdrop-filter: blur(12px);
+}
+
+.airport-prompt-field:focus-within {
+  border-color: rgba(240, 116, 70, 0.7);
+}
+
+.airport-prompt-field input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  /* 16px+ avoids iOS Safari auto-zoom on focus. */
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.airport-prompt-field input::placeholder {
+  color: rgba(159, 182, 205, 0.6);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.airport-prompt-submit {
+  width: 100%;
+  border-radius: 0.6rem;
+  background: linear-gradient(180deg, #ff5a1d, #f04416);
+  padding: 0.9rem 1rem;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 900;
+  box-shadow: 0 10px 30px rgba(240, 68, 22, 0.24);
+}
+
+.airport-prompt-hint {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: rgba(159, 182, 205, 0.7);
+}
+
+.airport-prompt-recents {
+  margin-top: 1.75rem;
+}
+
+.airport-prompt-recents-label {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(159, 182, 205, 0.7);
+}
+
+.airport-prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+}
+
+.airport-prompt-chip {
+  /* >=44px tall keeps chips comfortably tappable on touch screens. */
+  min-height: 44px;
+  border: 1px solid rgba(148, 183, 217, 0.32);
+  border-radius: 0.55rem;
+  background: rgba(2, 14, 27, 0.55);
+  padding: 0.5rem 1rem;
+  color: #f8fbff;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.airport-prompt-chip:hover {
+  border-color: rgba(240, 116, 70, 0.6);
+  background: rgba(240, 68, 22, 0.14);
+}
+
+/* On wider screens the input and button sit side by side. */
+@media (min-width: 640px) {
+  .airport-prompt-form {
+    flex-direction: row;
+  }
+
+  .airport-prompt-submit {
+    width: auto;
+    white-space: nowrap;
   }
 }

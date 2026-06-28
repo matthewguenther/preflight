@@ -13,6 +13,7 @@ import {
   Wind,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { AirportPrompt } from './components/AirportPrompt';
 import { TrafficScope } from './components/panels/TrafficScope';
 import { useAirport, normalizeAirportCode } from './hooks/useAirport';
 import { useAirportImage } from './hooks/useAirportImage';
@@ -24,6 +25,7 @@ import { useTfr } from './hooks/useTfr';
 import { useTraffic } from './hooks/useTraffic';
 import { useWeather } from './hooks/useWeather';
 import { densityAltitude } from './lib/densityAlt';
+import { getRecentAirports, addRecentAirport } from './lib/recentAirports';
 import { formatLocal } from './lib/time';
 
 const HERO_IMAGE = 'https://images.squarespace-cdn.com/content/v1/67f3ee1006d37e724190ac27/2eac87a2-5c81-4d45-a6ea-e56aca8203ad/Thaden-Exteriors-HR-007.jpg';
@@ -777,7 +779,16 @@ export default function App() {
   // Top-level data flow:
   // selected ICAO -> data hooks -> normalized payloads -> focused dashboard cards.
   // React Query owns request caching/refetching; App only coordinates the results.
-  const [selectedIcao, setSelectedIcao] = useState(() => localStorage.getItem('preflight:selectedAirport') || normalizeAirportCode(import.meta.env.VITE_AIRPORT_ICAO || 'KVBT'));
+  // No airport is pre-populated. A returning visitor resumes their last airport
+  // from localStorage; a deployment may still pin a default via VITE_AIRPORT_ICAO;
+  // otherwise we start empty and prompt the user to search.
+  const [selectedIcao, setSelectedIcao] = useState(() => {
+    const stored = localStorage.getItem('preflight:selectedAirport');
+    if (stored) return stored;
+    const envDefault = import.meta.env.VITE_AIRPORT_ICAO;
+    return envDefault ? normalizeAirportCode(envDefault) : '';
+  });
+  const [recents, setRecents] = useState(getRecentAirports);
   const airportQuery = useAirport(selectedIcao);
   const airport = airportQuery.data?.airport;
   const airportImageQuery = useAirportImage(airport || { icao: selectedIcao });
@@ -792,8 +803,17 @@ export default function App() {
   const minimums = useBlob('config', 'personal_minimums');
 
   useEffect(() => {
-    localStorage.setItem('preflight:selectedAirport', selectedIcao);
+    // Persist the selection so returning visitors resume it, and clear it when
+    // empty so they land back on the search prompt instead of a stale airport.
+    if (selectedIcao) localStorage.setItem('preflight:selectedAirport', selectedIcao);
+    else localStorage.removeItem('preflight:selectedAirport');
   }, [selectedIcao]);
+
+  useEffect(() => {
+    // Record airports only once they successfully resolve, using the canonical
+    // ICAO from the airport payload so recents stay clean and de-duplicated.
+    if (airport?.icao) setRecents(addRecentAirport(airport.icao));
+  }, [airport?.icao]);
 
   const sitrep = useMemo(() => evaluateSitrep({
     metar: weatherQuery.data?.metar,
@@ -810,6 +830,10 @@ export default function App() {
   }), [weatherQuery.data, trafficQuery.data, notamsQuery.data]);
   const previousSnapshot = usePreviousSnapshot(selectedIcao, snapshot);
   const changes = changesFrom(previousSnapshot, snapshot);
+
+  if (!selectedIcao) {
+    return <AirportPrompt onSelect={setSelectedIcao} recents={recents} />;
+  }
 
   return (
     <div className="legends-dashboard min-h-screen">

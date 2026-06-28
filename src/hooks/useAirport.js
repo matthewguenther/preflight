@@ -8,7 +8,9 @@ export function normalizeAirportCode(value) {
   // external APIs. Alphanumeric IDs such as 7M5 should not be rewritten.
   const input = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (/^[A-Z]{3}$/.test(input)) return `K${input}`;
-  return input || 'KVBT';
+  // Empty input stays empty so callers can distinguish "no airport selected"
+  // from a real code and avoid loading a hard-coded default.
+  return input;
 }
 
 export function useAirport(icao) {
@@ -18,6 +20,7 @@ export function useAirport(icao) {
     // cached airport payloads without changing the URL contract.
     queryKey: ['airport', code, AIRPORT_DATA_VERSION],
     queryFn: () => apiFetch(`/.netlify/functions/airport?icao=${code}&v=${AIRPORT_DATA_VERSION}`),
+    enabled: Boolean(code),
     staleTime: 5 * 60 * 1000,
   });
 }

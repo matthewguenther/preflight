@@ -49,7 +49,7 @@ export function Weather() {
               <div className="font-medium">{formatLocal(period.from_utc, 'EEE h a')} - {formatLocal(period.to_utc, 'h a')}</div>
               <div className="text-stone-500">{period.wind_dir_deg ?? 'VRB'} / {period.wind_speed_kt} kt · {period.visibility_sm ?? '--'} sm · {period.sky_condition || 'No sky detail'}</div>
             </div>
-          )) : <div className="text-sm text-stone-500">No TAF returned for KVBT.</div>}
+          )) : <div className="text-sm text-stone-500">No TAF returned for this airport.</div>}
         </div>
       </div>
       <pre className="mt-4 whitespace-pre-wrap rounded-md bg-stone-950 p-3 font-mono text-xs text-stone-100">{metar.raw || 'No METAR available'}</pre>
